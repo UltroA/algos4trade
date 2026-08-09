@@ -1,0 +1,8 @@
+.idea
+.venv
+.env
+.DS_Store
+results/
+__pycache__/
+src/core/certs/_combined_ca_bundle.pem
+src/core/certs/russian_trusted_ca.pem

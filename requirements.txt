@@ -1,0 +1,15 @@
+numpy
+pandas
+scipy
+scikit-learn
+lightgbm
+xgboost
+catboost
+hmmlearn
+hdbscan
+torch
+gplearn
+python-dotenv
+pyarrow
+requests
+tabulate
