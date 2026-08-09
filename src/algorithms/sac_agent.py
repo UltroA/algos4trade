@@ -1,23 +1,23 @@
 """
-SAC (Soft Actor-Critic) - RL для оптимизации размера позиции.
+SAC (Soft Actor-Critic) - RL for optimizing position size.
 
-в отличие от PPO (on-policy), SAC - это off-policy алгоритм с replay buffer и максимизацией награды + энтропии
-политики (лучшее исследование пространства действий, обычно выше
-sample-эффективность). Как и у PPO/DDPG в этом проекте, риск переобучения
-на конкретном бэктесте не устранён (см. таблицу: "в генерации сигналов
-почти всегда переобучение на бэктесте") - здесь это учебная реализация.
+unlike PPO (on-policy), SAC is an off-policy algorithm with a replay buffer and maximizes reward + policy
+entropy (better exploration of the action space, typically higher
+sample efficiency). Just like PPO/DDPG in this project, the risk of overfitting
+to the specific backtest is not eliminated (see the table: "signal generation
+is almost always overfit to the backtest") - this is an educational implementation here.
 
-Упрощения относительно оригинальной статьи Haarnoja et al. (2018):
-  * температура энтропии alpha - фиксированный гиперпараметр (без автотюнинга);
-  * один Q-критик вместо двойного (typical clipped double-Q) - для простоты;
-  * log-вероятность действия после tanh-сквошинга считается приближённо,
-    без строгой якобиан-поправки tanh (используется стандартная формула
-    log_prob(raw_action) - log(1 - tanh(raw_action)^2 + eps), как в статье,
-    но без дополнительных числовых стабилизаций).
+Simplifications relative to the original Haarnoja et al. (2018) paper:
+  * entropy temperature alpha - a fixed hyperparameter (no auto-tuning);
+  * a single Q-critic instead of a double one (typical clipped double-Q) - for simplicity;
+  * the log-probability of the action after tanh squashing is computed approximately,
+    without a strict tanh Jacobian correction (using the standard formula
+    log_prob(raw_action) - log(1 - tanh(raw_action)^2 + eps), as in the paper,
+    but without additional numerical stabilizations).
 
-Агент торгует ОДНИМ активом в core.trading_env.TradingEnv (см. ppo_agent.py
-для базового описания среды: состояние - окно доходностей + позиция,
-действие - целевая позиция [-1, 1], награда - pnl минус издержки).
+The agent trades a SINGLE asset in core.trading_env.TradingEnv (see ppo_agent.py
+for the base environment description: state - a window of returns + position,
+action - target position [-1, 1], reward - pnl minus costs).
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class _GaussianTanhPolicy(nn.Module):
         eps = torch.randn_like(mean)
         raw_action = mean + std * eps
         action = torch.tanh(raw_action)
-        # приближённая log-вероятность действия после tanh-сквошинга (см. докстринг файла)
+        # approximate log-probability of the action after tanh squashing (see file docstring)
         log_prob = (-0.5 * ((raw_action - mean) / (std + 1e-8)) ** 2 - log_std - 0.5 * np.log(2 * np.pi)).sum(-1)
         log_prob = log_prob - torch.log(1 - action.pow(2) + 1e-6).sum(-1)
         return action, log_prob
@@ -81,8 +81,8 @@ class SACAgent(SingleAssetAlgorithm):
     name = "SAC Position Sizer"
     category = AlgorithmCategory.REINFORCEMENT_LEARNING
     description = (
-        "Off-policy RL-агент (Soft Actor-Critic) учится выбирать непрерывный размер позиции "
-        "[-1, 1], максимизируя доходность за вычетом издержек плюс энтропийный бонус исследования."
+        "An off-policy RL agent (Soft Actor-Critic) learns to choose a continuous position size "
+        "[-1, 1], maximizing return net of costs plus an entropy exploration bonus."
     )
 
     def __init__(

@@ -1,18 +1,18 @@
 """
-DDPG (Deep Deterministic Policy Gradient) - RL для оптимизации размера позиции.
+DDPG (Deep Deterministic Policy Gradient) - RL for optimizing position size.
 
-DDPG(PPO/SAC/DDPG) - один из первых успешных
-off-policy алгоритмов для continuous control, исторически применялся в
-ранних работах по исполнению ордеров и сайзингу позиции. В отличие от PPO
-(on-policy) и SAC (стохастическая политика + энтропийный бонус), DDPG учит
-ДЕТЕРМИНИРОВАННУЮ политику через градиент по действию Q-функции и
-исследует пространство действий добавлением гауссовского шума во время
-сбора опыта. Как и у PPO/SAC в этом проекте, риск переобучения на
-конкретном бэктесте не устранён - учебная реализация.
+DDPG(PPO/SAC/DDPG) is one of the first successful
+off-policy algorithms for continuous control, historically used in
+early work on order execution and position sizing. Unlike PPO
+(on-policy) and SAC (stochastic policy + entropy bonus), DDPG learns a
+DETERMINISTIC policy via the action gradient of the Q-function and
+explores the action space by adding Gaussian noise during
+experience collection. As with PPO/SAC in this project, the risk of overfitting
+to a specific backtest is not eliminated - this is an educational implementation.
 
-Агент торгует ОДНИМ активом в core.trading_env.TradingEnv (см. ppo_agent.py
-для описания среды: состояние - окно доходностей + позиция, действие -
-целевая позиция [-1, 1], награда - pnl минус издержки на смену позиции).
+The agent trades a SINGLE asset in core.trading_env.TradingEnv (see ppo_agent.py
+for a description of the environment: state is a window of returns + position, action is
+the target position [-1, 1], reward is pnl minus the cost of changing position).
 """
 
 from __future__ import annotations
@@ -60,8 +60,8 @@ class DDPGAgent(SingleAssetAlgorithm):
     name = "DDPG Position Sizer"
     category = AlgorithmCategory.REINFORCEMENT_LEARNING
     description = (
-        "Off-policy RL-агент (Deep Deterministic Policy Gradient) учится выбирать непрерывный "
-        "размер позиции [-1, 1] через детерминированный policy gradient по критику Q(s, a)."
+        "Off-policy RL agent (Deep Deterministic Policy Gradient) learns to choose a continuous "
+        "position size [-1, 1] via deterministic policy gradient through a critic Q(s, a)."
     )
 
     def __init__(

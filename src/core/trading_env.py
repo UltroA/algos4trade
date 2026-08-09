@@ -1,10 +1,10 @@
 """
-Лёгкое торговое окружение для RL-алгоритмов (PPO/SAC/DDPG), без зависимости
-от gymnasium - только numpy. Общее для всех RL-файлов в src/algorithms/.
+Lightweight trading environment for RL algorithms (PPO/SAC/DDPG), with no
+dependency on gymnasium - numpy only. Shared by all RL files in src/algorithms/.
 
-Состояние: скользящее окно последних `window` доходностей + текущая позиция.
-Действие: целевая позиция в [-1, 1] (шорт..лонг), непрерывная.
-Награда: доходность портфеля за шаг минус издержки на изменение позиции.
+State: sliding window of the last `window` returns + current position.
+Action: target position in [-1, 1] (short..long), continuous.
+Reward: portfolio return per step minus the cost of changing position.
 """
 
 from __future__ import annotations

@@ -1,9 +1,9 @@
 """
-Единая точка запуска бенчмарков по всем зарегистрированным алгоритмам.
+Single entry point for running benchmarks across all registered algorithms.
 
-Собирает результаты :class:`~core.backtester.Backtester` по каждому алгоритму
-в одну таблицу и сохраняет её в results/benchmark_results.json и .md -
-это и есть "отдельный файл с результатами всех бенчмарков".
+Collects :class:`~core.backtester.Backtester` results for each algorithm
+into one table and saves it to results/benchmark_results.json and .md -
+this is the "separate file with all benchmark results".
 """
 
 from __future__ import annotations
@@ -22,11 +22,11 @@ from .base import BaseTradingAlgorithm, InputMode
 
 @dataclass
 class AlgorithmSpec:
-    """Регистрационная запись: как построить алгоритм и какие данные ему нужны."""
+    """Registration record: how to build the algorithm and what data it needs."""
 
     factory: Callable[[], BaseTradingAlgorithm]
-    ticker: str | None = None            # для InputMode.SINGLE_ASSET
-    tickers: list[str] | None = None     # для InputMode.MULTI_ASSET
+    ticker: str | None = None            # for InputMode.SINGLE_ASSET
+    tickers: list[str] | None = None     # for InputMode.MULTI_ASSET
 
 
 class BenchmarkRunner:
@@ -38,9 +38,9 @@ class BenchmarkRunner:
         train_frac: float = 0.7,
     ):
         """
-        single_asset_data - {ticker: OHLCV DataFrame}, общий пул данных,
-        из которого single-asset алгоритмы берут свой тикер, а multi-asset -
-        произвольное подмножество тикеров.
+        single_asset_data - {ticker: OHLCV DataFrame}, the shared data pool
+        from which single-asset algorithms take their ticker, and multi-asset
+        ones take an arbitrary subset of tickers.
         """
         self._data = single_asset_data
         self._results_dir = Path(results_dir)
@@ -108,15 +108,15 @@ class BenchmarkRunner:
             if col in df.columns:
                 df[col] = df[col].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
 
-        lines = ["# Результаты бенчмарков торговых алгоритмов", ""]
-        lines.append(f"Сгенерировано: {datetime.now(timezone.utc).isoformat()}")
+        lines = ["# Trading algorithm benchmark results", ""]
+        lines.append(f"Generated: {datetime.now(timezone.utc).isoformat()}")
         lines.append("")
         lines.append(df.to_markdown(index=False))
         lines.append("")
 
         ranked = results_df[results_df["error"].isna()].sort_values("sharpe_ratio", ascending=False)
         if not ranked.empty:
-            lines.append("## Топ-10 по Sharpe ratio (out-of-sample)")
+            lines.append("## Top 10 by Sharpe ratio (out-of-sample)")
             lines.append("")
             top = ranked[["algorithm_name", "sharpe_ratio", "total_return", "max_drawdown"]].head(10).copy()
             top["total_return"] = top["total_return"].map(lambda x: f"{x:.2%}")
@@ -127,7 +127,7 @@ class BenchmarkRunner:
 
         failed = results_df[results_df["error"].notna()]
         if not failed.empty:
-            lines.append("## Алгоритмы, завершившиеся с ошибкой")
+            lines.append("## Algorithms that finished with an error")
             lines.append("")
             lines.append(failed[["algorithm_name", "error"]].to_markdown(index=False))
             lines.append("")

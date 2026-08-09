@@ -1,7 +1,7 @@
 """
-Бэктестер: прогоняет любой :class:`~core.base.BaseTradingAlgorithm` на
-исторических данных, считает доходность стратегии с учётом издержек и
-метрики из :mod:`core.metrics`.
+Backtester: runs any :class:`~core.base.BaseTradingAlgorithm` on
+historical data, computes the strategy's returns net of transaction costs,
+and metrics from :mod:`core.metrics`.
 """
 
 from __future__ import annotations
@@ -47,16 +47,16 @@ class BacktestResult:
 
 class Backtester:
     """
-    transaction_cost_bps - издержки за смену позиции в базисных пунктах
-    (типичная комиссия+спред на MOEX для акций первого эшелона ~5-10 бп за сделку).
+    transaction_cost_bps - cost of a position change, in basis points
+    (typical MOEX commission+spread for blue-chip stocks is ~5-10 bp per trade).
     """
 
-    # Стадии одного прогона backtester'а - вынесены в константы, чтобы вызывающий
-    # код (например, прогресс-бар в scripts/run_all_benchmarks.py) мог сверяться
-    # с ними, а не хардкодить строки заново.
-    STAGE_FIT = "обучение"
-    STAGE_SIGNALS = "генерация сигналов"
-    STAGE_METRICS = "метрики"
+    # Stages of a single backtester run - pulled out into constants so that
+    # calling code (e.g. the progress bar in scripts/run_all_benchmarks.py) can
+    # check against them instead of hardcoding the strings again.
+    STAGE_FIT = "training"
+    STAGE_SIGNALS = "signal generation"
+    STAGE_METRICS = "metrics"
 
     def __init__(self, transaction_cost_bps: float = 5.0, train_frac: float = 0.7):
         self.transaction_cost_bps = transaction_cost_bps
@@ -68,9 +68,9 @@ class Backtester:
         data: pd.DataFrame | dict[str, pd.DataFrame],
         on_stage: Callable[[str], None] | None = None,
     ) -> BacktestResult:
-        """on_stage(stage) - необязательный колбэк, вызывается перед каждой стадией
-        (см. STAGE_* выше) с именем этой стадии; нужен только для прогресс-индикации,
-        на результат бэктеста не влияет."""
+        """on_stage(stage) - optional callback, called before each stage
+        (see STAGE_* above) with that stage's name; used only for progress
+        indication, does not affect the backtest result."""
         try:
             if algo.input_mode == InputMode.SINGLE_ASSET:
                 return self._run_single(algo, data, on_stage)
@@ -160,12 +160,12 @@ class Backtester:
             hr_asset_returns.append(asset_returns.reset_index(drop=True))
 
         portfolio_returns = pd.concat(per_asset_returns, axis=1).mean(axis=1) if per_asset_returns else pd.Series(dtype=float)
-        # модуль, а не среднее: у хеджированных стратегий (например, парный трейдинг)
-        # ноги имеют противоположный знак и наивное среднее давало бы вечный ноль.
+        # absolute value, not mean: hedged strategies (e.g. pairs trading) have
+        # legs with opposite signs, and a naive mean would give a perpetual zero.
         all_signals = pd.concat(signals_by_ticker.values(), axis=1).abs().mean(axis=1) if signals_by_ticker else pd.Series(dtype=float)
-        # HR считается на объединённых по всем тикерам наблюдениях (тикер, день),
-        # а не на агрегированном портфельном сигнале - иначе для хеджированных
-        # стратегий (см. модуль выше) формула теряет смысл.
+        # HR is computed on observations (ticker, day) pooled across all tickers,
+        # not on the aggregated portfolio signal - otherwise the formula loses
+        # meaning for hedged strategies (see the abs() note above).
         hit_rate = (
             compute_hit_rate(pd.concat(hr_positions, ignore_index=True), pd.concat(hr_asset_returns, ignore_index=True))
             if hr_positions else float("nan")
@@ -187,7 +187,7 @@ class Backtester:
         )
 
     def _strategy_returns(self, close: pd.Series, signals: pd.Series) -> pd.Series:
-        """Доходность = вчерашняя позиция * сегодняшняя доходность цены - издержки на изменение позиции."""
+        """Return = yesterday's position * today's price return - cost of the position change."""
         asset_returns = close.pct_change().fillna(0.0)
         position = signals.shift(1).fillna(0.0)
         gross_returns = position * asset_returns

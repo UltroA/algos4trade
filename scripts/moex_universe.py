@@ -1,20 +1,21 @@
 """
-Универсум из 100 ликвидных инструментов MOEX для кросс-секционной валидации
-бенчмарка (см. scripts/run_benchmarks_wide.py).
+Universe of 100 liquid MOEX instruments for cross-sectional validation
+of the benchmark (see scripts/run_benchmarks_wide.py).
 
-Список получен из публичного MOEX ISS API (не требует токена) - тикеры,
-входящие в индекс МосБиржи широкого рынка (MOEXBMI) на дату генерации:
+The list is obtained from the public MOEX ISS API (no token required) -
+tickers included in the MOEX Broad Market Index (MOEXBMI) as of the
+generation date:
 
 GET https://iss.moex.com/iss/statistics/engines/stock/markets/index/analytics/MOEXBMI/tickers.json
 
-Взяты тикеры последнего (максимального) периода действия ("till") в ответе
-API - то есть текущий состав индекса на 2026-08-08. MOEXBMI выбран потому,
-что явно недостаточная представленность инструментов (10 акций) была
-задокументированным ограничением исходного бенчмарка: HDBSCAN не находил
-кластеров, а обобщение single-asset результатов требовало "гораздо более
-широкого универсума (сотни бумаг)".
+Tickers are taken from the latest (maximum) validity period ("till") in the
+API response - i.e. the current index composition as of 2026-08-08. MOEXBMI
+was chosen because insufficient instrument coverage (10 stocks) was a
+documented limitation of the original benchmark: HDBSCAN could not find any
+clusters, and generalizing single-asset results required "a much wider
+universe (hundreds of securities)".
 
-Обновить список: запустить `python scripts/moex_universe.py`.
+To update the list: run `python scripts/moex_universe.py`.
 """
 
 TICKERS_100 = [
@@ -34,7 +35,7 @@ assert len(TICKERS_100) == 100, len(TICKERS_100)
 
 
 def fetch_current_moexbmi_tickers() -> list[str]:
-    """Перегенерировать список из MOEX ISS API (публичный, без токена)."""
+    """Regenerate the list from the MOEX ISS API (public, no token required)."""
     import requests
 
     url = "https://iss.moex.com/iss/statistics/engines/stock/markets/index/analytics/MOEXBMI/tickers.json"

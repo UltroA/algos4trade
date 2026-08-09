@@ -1,9 +1,9 @@
 """
-Прогоняет все алгоритмы из src/algorithms/ через BenchmarkRunner на реальных
-исторических данных MOEX (T-Invest API) и сохраняет сводные результаты в
-results/benchmark_results.json и results/benchmark_results.md.
+Runs all algorithms from src/algorithms/ through BenchmarkRunner on real
+historical MOEX data (T-Invest API) and saves summary results to
+results/benchmark_results.json and results/benchmark_results.md.
 
-Запуск: source .venv/bin/activate && python scripts/run_benchmarks.py
+Run: source .venv/bin/activate && python scripts/run_benchmarks.py
 """
 
 import sys
@@ -69,7 +69,7 @@ def main() -> None:
 
     runner = BenchmarkRunner(single_asset_data=data, results_dir="results")
 
-    # single-asset алгоритмы (торгуют PRIMARY_TICKER)
+    # single-asset algorithms (trade PRIMARY_TICKER)
     single_asset_algos = {
         "lightgbm_ranker": LightGBMRanker,
         "xgboost_ranker": XGBoostRanker,
@@ -105,7 +105,7 @@ def main() -> None:
     for spec_name, cls in single_asset_algos.items():
         runner.register(spec_name, lambda cls=cls: cls(), ticker=PRIMARY_TICKER)
 
-    # multi-asset алгоритмы
+    # multi-asset algorithms
     runner.register("kalman_filter_pairs", lambda: KalmanFilterPairsTrading(), tickers=["SBER", "VTBR"])
     runner.register("hdbscan_clustering", lambda: HDBSCANPairsClustering(), tickers=TICKERS)
     runner.register("correlation_clustering", lambda: CorrelationClustering(), tickers=TICKERS)

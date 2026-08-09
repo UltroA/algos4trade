@@ -1,16 +1,17 @@
 """
-Isolation Forest - детекция аномалий, риск-выключатель перед крахом.
+Isolation Forest - anomaly detection, a risk switch ahead of a crash.
 
-Isolation Forest(One-Class SVM): модель не генерирует
-торговый сигнал сама по себе, а обнаруживает аномальные рыночные режимы
-(резкие выбросы волатильности/объёма/доходности) и модулирует ими простой
-базовый трендовый сигнал (SMA(10) vs SMA(50)) - в аномальные дни позиция
-принудительно обнуляется ("риск-выключатель").
+Isolation Forest (One-Class SVM): the model does not generate
+a trading signal on its own, but detects anomalous market regimes
+(sharp spikes in volatility/volume/returns) and uses them to modulate a
+simple base trend signal (SMA(10) vs SMA(50)) - on anomalous days the
+position is forcibly zeroed out (a "risk switch").
 
-Реалистичный уровень: ловит 60-80% стрессовых дней. Главная слабость -
-много ложных срабатываний (модель детектирует статистические выбросы,
-а не именно "плохие для стратегии" дни, поэтому часть обнулений сигнала
-происходит зря, снижая доходность в спокойные, но нетипичные периоды).
+Realistic level: catches 60-80% of stress days. Main weakness -
+many false positives (the model detects statistical outliers, not
+specifically days that are "bad for the strategy", so some signal
+zero-outs happen for no reason, reducing returns during calm but
+atypical periods).
 """
 
 from __future__ import annotations
@@ -26,8 +27,8 @@ class IsolationForestRiskSwitch(SingleAssetAlgorithm):
     name = "Isolation Forest Risk Switch"
     category = AlgorithmCategory.ANOMALY_DETECTION
     description = (
-        "Isolation Forest детектирует аномальные рыночные режимы и обнуляет позицию "
-        "базовой трендовой стратегии (SMA crossover) в такие дни - риск-выключатель перед крахом."
+        "Isolation Forest detects anomalous market regimes and zeroes out the position "
+        "of a base trend strategy (SMA crossover) on such days - a risk switch ahead of a crash."
     )
 
     def __init__(
@@ -82,7 +83,7 @@ class IsolationForestRiskSwitch(SingleAssetAlgorithm):
         if X.empty:
             return pd.Series(0.0, index=data.index)
 
-        anomaly_flag = self.model.predict(X)  # -1 = аномалия, 1 = норма
+        anomaly_flag = self.model.predict(X)  # -1 = anomaly, 1 = normal
         is_normal = pd.Series(anomaly_flag == 1, index=X.index)
 
         risk_switch = is_normal.reindex(data.index).fillna(False).astype(float)
@@ -96,7 +97,7 @@ if __name__ == "__main__":
     rng = np.random.default_rng(0)
     n = 400
     price = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
-    # добавим несколько аномальных дней (резкие скачки), чтобы проверить риск-выключатель
+    # add a few anomalous days (sharp jumps) to test the risk switch
     price[200] *= 1.15
     price[250] *= 0.85
     dummy = pd.DataFrame(

@@ -1,9 +1,9 @@
 """
-Общая инженерия признаков для алгоритмов, работающих на OHLCV-данных.
+Shared feature engineering for algorithms operating on OHLCV data.
 
-Вынесена в отдельный модуль, чтобы ~20 разных ML-алгоритмов не дублировали
-одну и ту же логику построения технических индикаторов и таргетов.
-Все признаки на момент t используют только данные <= t (без утечки будущего).
+Extracted into a separate module so that ~20 different ML algorithms don't
+duplicate the same technical-indicator and target construction logic.
+All features at time t use only data <= t (no look-ahead leakage).
 """
 
 from __future__ import annotations
@@ -14,15 +14,16 @@ import pandas as pd
 
 def make_features(df: pd.DataFrame, horizon: int = 1) -> pd.DataFrame:
     """
-    Строит матрицу признаков + таргеты по OHLCV-данным одного инструмента.
+    Builds the feature matrix + targets from a single instrument's OHLCV data.
 
-    Возвращает DataFrame с исходными OHLCV + признаками + колонками:
-        fwd_return   - будущая доходность close(t+horizon)/close(t) - 1 (для регрессии)
-        fwd_direction - 1, если fwd_return > 0, иначе 0 (для классификации)
+    Returns a DataFrame with the original OHLCV + features + columns:
+        fwd_return   - future return close(t+horizon)/close(t) - 1 (for regression)
+        fwd_direction - 1 if fwd_return > 0, else 0 (for classification)
 
-    Первые/последние строки с NaN (из-за окон индикаторов и горизонта) не удаляются
-    здесь намеренно - вызывающий код сам решает, обрезать их до или после сплита
-    на train/test, чтобы не терять данные не по делу.
+    The leading/trailing rows with NaN (from indicator windows and the horizon)
+    are deliberately not dropped here - the calling code decides whether to
+    trim them before or after the train/test split, so as not to lose data
+    unnecessarily.
     """
     out = df.copy()
     close = out["close"]
@@ -86,7 +87,7 @@ FEATURE_COLUMNS = [
 def split_features_target(
     feat_df: pd.DataFrame, target_col: str = "fwd_direction", feature_cols: list[str] | None = None
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """Отбрасывает строки с NaN в фичах/таргете и возвращает (X, y)."""
+    """Drops rows with NaN in the features/target and returns (X, y)."""
     cols = feature_cols or FEATURE_COLUMNS
     cols = [c for c in cols if c in feat_df.columns]
     clean = feat_df.dropna(subset=cols + [target_col])
@@ -94,6 +95,6 @@ def split_features_target(
 
 
 def chronological_split(df: pd.DataFrame, train_frac: float = 0.7) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Хронологический сплит без перемешивания (обязателен для временных рядов)."""
+    """Chronological split without shuffling (required for time series)."""
     split_idx = int(len(df) * train_frac)
     return df.iloc[:split_idx], df.iloc[split_idx:]

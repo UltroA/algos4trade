@@ -1,25 +1,26 @@
 """
-Walk-forward валидация: закрывает ограничение №1 из "Ограничения
-исследования" основного документа (docs/research/*.typ) - до сих пор все
-метрики посчитаны на ОДНОМ хронологическом сплите 70:30, что не позволяет
-оценить дисперсию результата между разными участками истории.
+Walk-forward validation: closes limitation #1 from the "Study Limitations"
+section of the main document (docs/research/*.typ) - so far all metrics
+have been computed on a SINGLE chronological 70:30 split, which does not
+allow estimating the variance of the result across different periods of
+history.
 
-Метод: тикер SBER (тот же, что и в базовом прогоне - здесь закрывается
-ограничение "один сплит", а не "один инструмент", это отдельное ограничение,
-уже закрытое в расширенной/голдхолд-валидации) делится на 4 НЕПЕРЕСЕКАЮЩИХСЯ
-последовательных хронологических блока. Внутри каждого блока -- обычный
-Backtester (свой 70:30 сплит и издержки 5 бп на этом блоке). Прогоняются:
-топ-8 single-asset алгоритмов по Sharpe базового SBER-эксперимента (VAE,
-Symbolic Regression, N-BEATS, PPO, Isolation Forest, DDPG, One-Class SVM,
-Gaussian Process - мультиактивные алгоритмы намеренно исключены: им нужен
-широкий тикер-пул, а не окно по времени одного тикера) + 3 композита из
-composite.py.
+Method: the SBER ticker (the same one as in the baseline run - this closes
+the "single split" limitation, not the "single instrument" one, which is a
+separate limitation already closed by the wide/holdout validation) is split
+into 4 NON-OVERLAPPING consecutive chronological blocks. Within each block,
+a regular Backtester is used (its own 70:30 split and 5bp costs on that
+block). Runs: the top-8 single-asset algorithms by Sharpe from the baseline
+SBER experiment (VAE, Symbolic Regression, N-BEATS, PPO, Isolation Forest,
+DDPG, One-Class SVM, Gaussian Process - multi-asset algorithms are
+deliberately excluded: they need a wide ticker pool, not a time window over
+a single ticker) + 3 composites from composite.py.
 
-Результат - не средняя метрика по 4 окнам, а именно РАЗБРОС (mean/std/min/max)
-между окнами: устойчивый алгоритм должен быть похож на себя в разных участках
-истории, а не только в среднем.
+The result is not the average metric across the 4 windows, but the SPREAD
+(mean/std/min/max) between windows: a robust algorithm should look like
+itself across different periods of history, not just on average.
 
-Запуск: source .venv/bin/activate && python scripts/run_walkforward_benchmarks.py
+Run: source .venv/bin/activate && python scripts/run_walkforward_benchmarks.py
 """
 
 import json
@@ -74,7 +75,7 @@ STRATEGIES = {
 
 
 def make_windows(df: pd.DataFrame, n_windows: int) -> list[pd.DataFrame]:
-    """N непересекающихся последовательных блоков подряд (без общих строк)."""
+    """N non-overlapping consecutive blocks in a row (no shared rows)."""
     edges = np.linspace(0, len(df), n_windows + 1, dtype=int)
     return [df.iloc[edges[i]:edges[i + 1]] for i in range(n_windows)]
 

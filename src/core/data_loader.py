@@ -1,8 +1,8 @@
 """
-Загрузчик исторических рыночных данных из T-Invest API с дисковым кэшем.
+Historical market data loader from the T-Invest API with disk caching.
 
-Используется всеми алгоритмами как единый источник OHLCV-данных, чтобы
-бэктесты были воспроизводимы и не требовали повторных сетевых запросов.
+Used by all algorithms as the single source of OHLCV data so that
+backtests are reproducible and don't require repeated network requests.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ class CandleRequest:
 
 
 class TInvestDataLoader:
-    """Высокоуровневый загрузчик OHLCV-свечей с кэшированием на диск (parquet)."""
+    """High-level OHLCV candle loader with disk caching (parquet)."""
 
     def __init__(self, client: TInvestClient | None = None, cache_dir: str | Path = "data/cache"):
         self._client = client or TInvestClient()
@@ -61,8 +61,8 @@ class TInvestDataLoader:
         use_cache: bool = True,
     ) -> pd.DataFrame:
         """
-        Возвращает DataFrame с колонками [open, high, low, close, volume],
-        индекс - временная метка свечи (UTC).
+        Returns a DataFrame with columns [open, high, low, close, volume],
+        indexed by candle timestamp (UTC).
         """
         if interval not in _INTERVAL_MAP:
             raise ValueError(f"Unsupported interval {interval!r}, expected one of {list(_INTERVAL_MAP)}")

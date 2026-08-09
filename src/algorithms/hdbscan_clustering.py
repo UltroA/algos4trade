@@ -1,16 +1,16 @@
 """
-HDBSCAN-кластеризация - поиск пар/корзин для статистического арбитража.
+HDBSCAN clustering - finding pairs/baskets for statistical arbitrage.
 
-HDBSCAN-кластеризация -  активы группируются по схожести временных рядов
-лог-доходностей плотностной кластеризацией HDBSCAN (в отличие от k-means,
-не требует заранее задавать число кластеров и умеет помечать "шумовые",
-не входящие ни в один кластер активы меткой -1). Внутри каждого найденного
-кластера торгуется mean-reversion спреда актива относительно среднего
-по кластеру.
+HDBSCAN clustering - assets are grouped by similarity of their log-return
+time series using density-based HDBSCAN clustering (unlike k-means, it does
+not require specifying the number of clusters in advance and can label
+"noise" assets that do not belong to any cluster with -1). Within each
+discovered cluster, the mean-reversion of an asset's spread relative to the
+cluster average is traded.
 
-Главная слабость (см. таблицу): кластеры нестабильны во времени - состав
-меняется от переобучения к переобучению, поэтому здесь кластеризация
-считается один раз на train и полностью статична на test (без адаптации).
+Main weakness (see table): clusters are unstable over time - membership
+changes from refit to refit, so here clustering is computed once on train
+and stays fully static on test (no adaptation).
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ class HDBSCANPairsClustering(MultiAssetAlgorithm):
     name = "HDBSCAN Pairs/Basket Clustering"
     category = AlgorithmCategory.CLUSTERING
     description = (
-        "Плотностная кластеризация HDBSCAN по лог-доходностям находит группы похожих активов; "
-        "внутри каждой группы торгуется возврат к среднему цены актива относительно среднего по группе."
+        "Density-based HDBSCAN clustering over log-returns finds groups of similar assets; "
+        "within each group, the mean-reversion of an asset's price relative to the group average is traded."
     )
 
     def __init__(
@@ -63,10 +63,10 @@ class HDBSCANPairsClustering(MultiAssetAlgorithm):
             self.is_fitted = False
             return self
 
-        # кластеризуем по недавнему окну, а не по всей истории: снижает размерность
-        # (curse of dimensionality валит HDBSCAN на длинных рядах при малом числе активов)
-        # и одновременно является частичным ответом на "кластеры нестабильны во времени" -
-        # состав кластеров пересчитывается от актуальных, а не устаревших корреляций.
+        # cluster on a recent window rather than the full history: reduces dimensionality
+        # (curse of dimensionality breaks HDBSCAN on long series with few assets)
+        # and is also a partial answer to "clusters are unstable over time" -
+        # cluster membership is recomputed from current, not stale, correlations.
         common_index = common_index.sort_values()[-self.lookback :]
         matrix = np.vstack([log_returns[t].reindex(common_index).to_numpy() for t in tickers])
 
@@ -90,7 +90,7 @@ class HDBSCANPairsClustering(MultiAssetAlgorithm):
         for label in labels_present:
             members = self._cluster_members(label, available)
             if len(members) < 2:
-                continue  # актив без пары в своём кластере -> сигнал остаётся 0
+                continue  # asset with no pair in its cluster -> signal stays 0
 
             norm_prices = {}
             common_index = None
@@ -111,8 +111,8 @@ class HDBSCANPairsClustering(MultiAssetAlgorithm):
                 zscore = (spread - spread_mean) / spread_std.replace(0, np.nan)
 
                 position = pd.Series(0.0, index=zscore.index)
-                position[zscore > self.entry_z] = -1.0   # актив дороже своей группы -> шорт (ждём возврата вниз)
-                position[zscore < -self.entry_z] = 1.0    # актив дешевле своей группы -> лонг
+                position[zscore > self.entry_z] = -1.0   # asset pricier than its group -> short (wait for reversion down)
+                position[zscore < -self.entry_z] = 1.0    # asset cheaper than its group -> long
                 position[zscore.abs() < self.exit_z] = 0.0
                 position = position.replace(0.0, np.nan).ffill().fillna(0.0)
 
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         "A3": make_df(common1, 1.2),
         "B1": make_df(common2, 1.0),
         "B2": make_df(common2, 0.5),
-        "C1": make_df(np.cumsum(rng.normal(0, 0.02, n)), 1.0),  # некоррелированный "шумовой" актив
+        "C1": make_df(np.cumsum(rng.normal(0, 0.02, n)), 1.0),  # uncorrelated "noise" asset
     }
 
     train_data = {k: v.iloc[:280] for k, v in data.items()}

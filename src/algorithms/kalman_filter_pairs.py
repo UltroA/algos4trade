@@ -1,15 +1,16 @@
 """
-Фильтр Калмана - динамический хедж-коэффициент в парном трейдинге.
+Kalman filter - dynamic hedge ratio in pairs trading.
 
-Табличная строка #7. Для пары активов (A, B) фильтр Калмана онлайн оценивает
-линейную зависимость close_A(t) = beta(t) * close_B(t) + alpha(t), где beta(t)
-плавно меняется во времени (в отличие от статической OLS-регрессии). Спред
-z(t) = close_A(t) - beta(t) * close_B(t) торгуется на возврат к среднему:
-шорт спреда при z далеко выше своего скользящего среднего, лонг - при z далеко ниже.
+Table row #7. For a pair of assets (A, B) the Kalman filter estimates online
+the linear relationship close_A(t) = beta(t) * close_B(t) + alpha(t), where
+beta(t) changes smoothly over time (unlike a static OLS regression). The
+spread z(t) = close_A(t) - beta(t) * close_B(t) is traded for mean
+reversion: short the spread when z is far above its rolling mean, long when
+z is far below.
 
-Главная слабость (см. таблицу): разрыв коинтеграции ведёт к большому убытку -
-здесь это не защищено отдельным фильтром, только ограничением плеча через
-клиппинг сигнала в [-1, 1].
+Main weakness (see table): a cointegration break leads to a large loss -
+here this is not guarded by a separate filter, only by leverage limits via
+clipping the signal to [-1, 1].
 """
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ class KalmanFilterPairsTrading(MultiAssetAlgorithm):
     name = "Kalman Filter Pairs Trading"
     category = AlgorithmCategory.PAIRS_STAT_ARB
     description = (
-        "Онлайн-оценка динамического хедж-коэффициента между двумя активами фильтром Калмана "
-        "и торговля возвратом спреда к среднему (mean-reversion статистического арбитража)."
+        "Online estimation of a dynamic hedge ratio between two assets via a Kalman filter "
+        "and trading the spread's reversion to the mean (statistical arbitrage mean-reversion)."
     )
 
     def __init__(
@@ -50,7 +51,7 @@ class KalmanFilterPairsTrading(MultiAssetAlgorithm):
         self.zscore_window = zscore_window
         self.entry_z = entry_z
         self.exit_z = exit_z
-        # Состояние фильтра Калмана: theta = [beta, alpha], P - ковариация оценки.
+        # Kalman filter state: theta = [beta, alpha], P - estimate covariance.
         self._theta = np.array([1.0, 0.0])
         self._P = np.eye(2)
 
@@ -61,14 +62,14 @@ class KalmanFilterPairsTrading(MultiAssetAlgorithm):
         return a, b
 
     def _kalman_beta_series(self, price_a: pd.Series, price_b: pd.Series) -> pd.Series:
-        """Прогоняет фильтр Калмана вдоль ряда, возвращает beta(t) (без забегания вперёд)."""
+        """Runs the Kalman filter along the series, returns beta(t) (no look-ahead)."""
         common_index = price_a.index.intersection(price_b.index)
         price_a = price_a.loc[common_index]
         price_b = price_b.loc[common_index]
         n = len(price_a)
         betas = np.empty(n)
-        Q = self.delta * np.eye(2)  # шумовая ковариация процесса (плавный дрейф beta, alpha)
-        R = self.observation_cov     # шум наблюдения
+        Q = self.delta * np.eye(2)  # process noise covariance (smooth drift of beta, alpha)
+        R = self.observation_cov     # observation noise
 
         theta = self._theta.copy()
         P = self._P.copy()
@@ -93,7 +94,7 @@ class KalmanFilterPairsTrading(MultiAssetAlgorithm):
         a, b = self._pick_pair(train_data)
         self.asset_a, self.asset_b = a, b
         price_a, price_b = train_data[a]["close"], train_data[b]["close"]
-        self._kalman_beta_series(price_a, price_b)  # прогреваем состояние фильтра на train
+        self._kalman_beta_series(price_a, price_b)  # warm up the filter state on train
         self.is_fitted = True
         return self
 
@@ -110,12 +111,12 @@ class KalmanFilterPairsTrading(MultiAssetAlgorithm):
         zscore = (spread - spread_mean) / spread_std.replace(0, np.nan)
 
         position_a = pd.Series(0.0, index=zscore.index)
-        position_a[zscore > self.entry_z] = -1.0   # спред завышен -> шорт A / лонг B
-        position_a[zscore < -self.entry_z] = 1.0    # спред занижен -> лонг A / шорт B
+        position_a[zscore > self.entry_z] = -1.0   # spread too high -> short A / long B
+        position_a[zscore < -self.entry_z] = 1.0    # spread too low -> long A / short B
         position_a[zscore.abs() < self.exit_z] = 0.0
         position_a = position_a.replace(0.0, np.nan).ffill().fillna(0.0)
 
-        position_b = -position_a  # хедж-нога с противоположным знаком
+        position_b = -position_a  # hedge leg with the opposite sign
 
         signals = {a: position_a.fillna(0.0), b: position_b.fillna(0.0)}
         for ticker, df in data.items():

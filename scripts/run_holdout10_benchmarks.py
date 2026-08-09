@@ -1,34 +1,33 @@
 """
-Валидация на независимом голдхолде из 10 новых инструментов MOEX, ни разу
-не встречавшихся ни в базовом прогоне (10 акций), ни в расширенной
-валидации (97 акций MOEXBMI), ни при разработке композитных пайплайнов
-(src/algorithms/composite.py). Цель - проверить, насколько результаты,
-полученные на MOEXBMI-100, переносятся на инструменты за пределами этого
-индекса (более мелкие/менее ликвидные бумаги, отсутствующие в широком
-рыночном индексе).
+Validation on an independent holdout of 10 new MOEX instruments that never
+appeared in the baseline run (10 stocks), the wide validation (97 MOEXBMI
+stocks), or the development of the composite pipelines
+(src/algorithms/composite.py). The goal is to check how well results
+obtained on MOEXBMI-100 transfer to instruments outside that index (smaller/
+less liquid stocks absent from the broad market index).
 
-Тикеры отобраны через MOEX ISS API: обыкновенные/привилегированные акции
-(SECTYPE in {1,2}, INSTRID=EQIN) режима торгов TQBR, НЕ входящие в
-scripts/moex_universe.TICKERS_100, с историей котировок с 2019 г. (кроме
-недавних IPO, где взята вся доступная история >= 300 дней):
+Tickers were selected via the MOEX ISS API: common/preferred stocks
+(SECTYPE in {1,2}, INSTRID=EQIN) in TQBR trading mode, NOT included in
+scripts/moex_universe.TICKERS_100, with quote history since 2019 (except for
+recent IPOs, where all available history >= 300 days was taken):
 
-    LEAS  - ПАО "ЛК "Европлан"
-    MVID  - "М.видео" ПАО
-    ABIO  - ПАО "Артген"
-    DELI  - Каршеринг Руссия (Делимобиль)
-    IVAT  - ПАО ИВА
-    KMAZ  - КАМАЗ ПАО
-    MRKZ  - ПАО Россети Северо-Запад
-    TGKN  - ПАО "ТГК-14"
-    GCHE  - Группа Черкизово ПАО
-    BANE  - Башнефть АНК (обыкн.)
+    LEAS  - PJSC "Europlan Leasing Company"
+    MVID  - "M.Video" PJSC
+    ABIO  - PJSC "Artgen"
+    DELI  - Carsharing Russia (Delimobil)
+    IVAT  - PJSC IVA
+    KMAZ  - KAMAZ PJSC
+    MRKZ  - PJSC Rosseti North-West
+    TGKN  - PJSC "TGC-14"
+    GCHE  - Cherkizovo Group PJSC
+    BANE  - Bashneft ANK (common)
 
-Прогоняются: 5 "чистых" компонентов (VAE, N-BEATS, Elastic Net, Isolation
-Forest, One-Class SVM), 3 композита из composite.py и Thompson Sampling с
-"сильной рукой" против исходного Thompson с сырым momentum - на этом же
-10-тикерном наборе.
+Runs: 5 "pure" components (VAE, N-BEATS, Elastic Net, Isolation Forest,
+One-Class SVM), 3 composites from composite.py, and Thompson Sampling with
+a "strong arm" versus the original Thompson with raw momentum - on this
+same 10-ticker set.
 
-Запуск: source .venv/bin/activate && python scripts/run_holdout10_benchmarks.py
+Run: source .venv/bin/activate && python scripts/run_holdout10_benchmarks.py
 """
 
 import json

@@ -1,20 +1,20 @@
 """
-N-BEATS - чистое прогнозирование временного ряда без внешних признаков.
+N-BEATS - pure time-series forecasting without external features.
 
-сильные бенчмарки на M-соревнованиях
-по прогнозированию временных рядов, но, в отличие от supervised-моделей
-проекта (LightGBM/XGBoost/...), работает ТОЛЬКО с самим рядом доходностей -
-без технических индикаторов и объёма. Главная слабость (см. таблицу):
-прогноз цены/доходности ещё не значит прибыльную торговую стратегию - здесь
-это явно видно, т.к. точный прогноз следующей доходности переводится в
-позицию отдельным, наивным правилом (sign * величина), а не оптимизируется
-напрямую под Sharpe/PnL.
+Strong benchmarks in the M-competitions
+for time series forecasting, but unlike the project's supervised models
+(LightGBM/XGBoost/...), it works ONLY with the returns series itself -
+no technical indicators or volume. Main weakness (see table):
+a price/return forecast is not yet a profitable trading strategy - this is
+clearly visible here, since an accurate forecast of the next return is
+converted into a position by a separate, naive rule (sign * magnitude),
+rather than being optimized directly for Sharpe/PnL.
 
-Архитектура - упрощённый N-BEATS: стек из нескольких блоков, каждый блок -
-MLP над окном последних `lookback` доходностей, выдающий (backcast, forecast).
-backcast вычитается из входа перед следующим блоком (residual stacking -
-ключевая идея N-BEATS: каждый следующий блок видит то, что не смог объяснить
-предыдущий), а forecast-ы всех блоков суммируются в финальный прогноз.
+Architecture - simplified N-BEATS: a stack of several blocks, each block is
+an MLP over a window of the last `lookback` returns, producing (backcast, forecast).
+The backcast is subtracted from the input before the next block (residual stacking -
+the key idea of N-BEATS: each subsequent block sees what the previous one
+could not explain), and the forecasts of all blocks are summed into the final forecast.
 """
 
 from __future__ import annotations
@@ -66,8 +66,8 @@ class NBEATSForecaster(SingleAssetAlgorithm):
     name = "N-BEATS Forecaster"
     category = AlgorithmCategory.TIME_SERIES_FORECAST
     description = (
-        "Чистое прогнозирование следующей доходности по ряду доходностей (без внешних фич) "
-        "через стек residual-блоков N-BEATS; прогноз конвертируется в позицию наивным правилом."
+        "Pure forecasting of the next return from the returns series (no external features) "
+        "via a stack of N-BEATS residual blocks; the forecast is converted into a position by a naive rule."
     )
 
     def __init__(

@@ -1,34 +1,33 @@
 """
-Кросс-секционная валидация бенчмарка на расширенном универсуме из ~100
-инструментов MOEX (scripts/moex_universe.TICKERS_100), а не на одной акции
-SBER, как в scripts/run_benchmarks.py.
+Cross-sectional validation of the benchmark on the extended universe of ~100
+MOEX instruments (scripts/moex_universe.TICKERS_100), rather than on a
+single SBER stock as in scripts/run_benchmarks.py.
 
-Зачем: исходный бенчмарк (results/benchmark_results.{json,md}) и раздел
-docs/research/*.typ явно фиксируют методологическое ограничение - почти все
-single-asset алгоритмы протестированы на единственном тикере, а
-multi-asset алгоритмы (в первую очередь HDBSCAN-кластеризация) недополучили
-данных на пуле всего из 10 акций, из-за чего HDBSCAN не нашёл ни одного
-кластера. Этот скрипт:
+Why: the original benchmark (results/benchmark_results.{json,md}) and the
+docs/research/*.typ section explicitly note a methodological limitation -
+almost all single-asset algorithms were tested on a single ticker, and
+multi-asset algorithms (chiefly HDBSCAN clustering) were starved of data on
+a pool of only 10 stocks, which is why HDBSCAN found no clusters at all.
+This script:
 
-  1. single-asset алгоритмы (26 шт.) - обучает и тестирует НА КАЖДОМ доступном
-     тикере универсума отдельно (тот же 70/30 хронологический сплит на
-     каждом), затем агрегирует метрики (среднее/медиана Sharpe, доля
-     тикеров с положительным Sharpe и т.д.) - это прямая проверка
-     устойчивости результата к выбору инструмента.
-  2. multi-asset алгоритмы, которым нужен широкий пул инструментов
-     (HDBSCAN clustering, correlation clustering, Thompson bandits) -
-     прогоняются на ПОЛНОМ доступном универсуме (а не на 10 акциях).
-  3. Kalman Filter Pairs Trading оставлен как в базовом прогоне (SBER/VTBR) -
-     это по конструкции тест на одной паре, расширение числа инструментов
-     ему не даёт дополнительной информации без отдельной процедуры отбора
-     пар (не входит в объём этой валидации).
+  1. single-asset algorithms (26 of them) - trained and tested ON EACH
+     available ticker of the universe separately (the same 70/30
+     chronological split on each), then aggregates metrics (mean/median
+     Sharpe, share of tickers with positive Sharpe, etc.) - this is a
+     direct check of how robust the result is to instrument choice.
+  2. multi-asset algorithms that need a wide instrument pool (HDBSCAN
+     clustering, correlation clustering, Thompson bandits) - run on the
+     FULL available universe (not just 10 stocks).
+  3. Kalman Filter Pairs Trading is left as in the baseline run (SBER/VTBR) -
+     by construction it is a single-pair test, and widening the instrument
+     count gives it no extra information without a separate pair-selection
+     procedure (out of scope for this validation).
 
-Результаты сохраняются в results/benchmark_results_wide.json (полные,
-по каждому тикеру) и results/benchmark_results_wide.md (агрегированная
-сводная таблица + топ/антитоп).
+Results are saved to results/benchmark_results_wide.json (full, per ticker)
+and results/benchmark_results_wide.md (aggregated summary table + top/bottom).
 
-Запуск: source .venv/bin/activate && python scripts/run_benchmarks_wide.py
-Ожидаемое время выполнения: ~1-2 часа (26 алгоритмов x ~90 тикеров).
+Run: source .venv/bin/activate && python scripts/run_benchmarks_wide.py
+Expected runtime: ~1-2 hours (26 algorithms x ~90 tickers).
 """
 
 import json
@@ -154,7 +153,7 @@ def run_single_asset_cross_sectional(backtester: Backtester, data: dict[str, pd.
         done = ai * n_tickers
         total = n_algos * n_tickers
         print(f"[wide] {spec_name}: {n_tickers} tickers done ({done}/{total}, {elapsed:.0f}s elapsed)")
-        # чекпоинт после каждого алгоритма - на случай прерывания долгого прогона
+        # checkpoint after each algorithm - in case a long run gets interrupted
         pd.DataFrame(rows).to_json(RESULTS_DIR / "_wide_single_asset_checkpoint.json", orient="records", indent=2, force_ascii=False)
     return pd.DataFrame(rows)
 
@@ -207,17 +206,17 @@ def run_multi_asset(backtester: Backtester, data: dict[str, pd.DataFrame]) -> pd
 
 def save_markdown(agg_df: pd.DataFrame, multi_df: pd.DataFrame, n_tickers: int, path: Path) -> None:
     lines = [
-        "# Кросс-секционная валидация бенчмарка на 100-инструментном универсуме MOEX",
+        "# Cross-sectional benchmark validation on the 100-instrument MOEX universe",
         "",
-        f"Сгенерировано: {datetime.now(timezone.utc).isoformat()}",
-        f"Доступно тикеров с достаточной историей: {n_tickers} из {len(TICKERS_100)} (MOEXBMI)",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Tickers available with sufficient history: {n_tickers} of {len(TICKERS_100)} (MOEXBMI)",
         "",
-        "## Single-asset алгоритмы: агрегированные метрики по всем доступным тикерам",
+        "## Single-asset algorithms: aggregated metrics across all available tickers",
         "",
-        "Каждый алгоритм обучен и протестирован независимо на каждом тикере "
-        "(тот же 70/30 хронологический сплит, что и в базовом прогоне). "
-        "`mean_sharpe`/`median_sharpe` - среднее/медиана Sharpe по тикерам, "
-        "`pct_positive_sharpe` - доля тикеров, на которых Sharpe > 0.",
+        "Each algorithm was trained and tested independently on each ticker "
+        "(the same 70/30 chronological split as in the baseline run). "
+        "`mean_sharpe`/`median_sharpe` - mean/median Sharpe across tickers, "
+        "`pct_positive_sharpe` - share of tickers where Sharpe > 0.",
         "",
     ]
     disp = agg_df.copy()
@@ -235,7 +234,7 @@ def save_markdown(agg_df: pd.DataFrame, multi_df: pd.DataFrame, n_tickers: int, 
     lines.append(disp[cols].to_markdown(index=False))
     lines.append("")
 
-    lines.append("## Multi-asset алгоритмы на полном доступном универсуме")
+    lines.append("## Multi-asset algorithms on the full available universe")
     lines.append("")
     mdisp = multi_df.copy()
     for col in ("total_return", "annualized_return", "max_drawdown", "win_rate", "hit_rate"):

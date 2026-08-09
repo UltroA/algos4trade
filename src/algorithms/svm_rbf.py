@@ -1,14 +1,14 @@
 """
-SVM с RBF-ядром - классификация направления на малых выборках.
+SVM with an RBF kernel - direction classification on small samples.
 
-опорные векторы с RBF-ядром предсказывают вероятность
-роста цены на следующем горизонте по тем же техническим признакам, что и
-остальные supervised-модели проекта (core.features.make_features).
+support vectors with an RBF kernel predict the probability
+of the price rising over the next horizon using the same technical features as
+the project's other supervised models (core.features.make_features).
 
-Реалистичный уровень: 51-53% направленной точности. Главная слабость -
-плохая масштабируемость: обучение SVM растёт как O(n^2..n^3) по числу
-примеров, поэтому модель здесь пригодна прежде всего для небольших/средних
-train-выборок (сотни-первые тысячи строк), что типично для одного тикера.
+Realistic level: 51-53% directional accuracy. The main weakness is
+poor scalability: SVM training scales as O(n^2..n^3) in the number of
+samples, so this model is suitable primarily for small/medium
+train samples (hundreds to a few thousand rows), typical of a single ticker.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ class SVMDirectionClassifier(SingleAssetAlgorithm):
     name = "SVM RBF Direction Classifier"
     category = AlgorithmCategory.SUPERVISED_RANKING
     description = (
-        "SVM с RBF-ядром классифицирует направление движения цены на следующем горизонте "
-        "по техническим признакам. Хорошо работает на малых выборках, плохо масштабируется на больших."
+        "An SVM with an RBF kernel classifies the direction of price movement over the next horizon "
+        "using technical features. Works well on small samples, scales poorly on large ones."
     )
 
     def __init__(

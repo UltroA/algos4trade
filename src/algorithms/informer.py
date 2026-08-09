@@ -1,18 +1,18 @@
 """
-Transformer (упрощённый Informer) - self-attention по полной последовательности.
+Transformer (simplified Informer) - self-attention over the full sequence.
 
-Transformer(PatchTST/Informer). Внимание: это
-аппроксимация Informer, а не полная реализация из оригинальной статьи -
-здесь используется обычный nn.TransformerEncoder (полное O(seq_len^2)
-внимание) вместо ProbSparse self-attention, ради которого Informer и был
-предложен (снижение сложности внимания для длинных горизонтов). Каждый день
-окна `seq_len` подаётся как отдельный токен (без патчинга, в отличие от
-transformer_patchtst.py), линейно проецируется в d_model, к эмбеддингам
-добавляются обучаемые позиционные эмбеддинги, дальше - TransformerEncoder
-и mean pooling по временным шагам.
+Transformer (PatchTST/Informer). Note: this is
+an approximation of Informer, not the full implementation from the original
+paper - here a plain nn.TransformerEncoder (full O(seq_len^2) attention) is
+used instead of the ProbSparse self-attention that Informer was actually
+proposed for (reducing attention complexity for long horizons). Each day of
+the `seq_len` window is fed as a separate token (no patching, unlike
+transformer_patchtst.py), linearly projected into d_model, learnable
+positional embeddings are added to the embeddings, then a TransformerEncoder
+and mean pooling over time steps.
 
-Реалистичный уровень: хорош на дневках с длинной историей, дорог по данным;
-на коротких выборках (как здесь) склонен к переобучению не меньше, чем LSTM.
+Realistic level: good on daily bars with long history, data-hungry;
+on short samples (like here) it is prone to overfitting no less than LSTM.
 """
 
 from __future__ import annotations
@@ -40,10 +40,10 @@ class _InformerLiteNet(nn.Module):
         self.head = nn.Linear(d_model, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (batch, seq_len, n_features) - каждый день = один токен
+        # x: (batch, seq_len, n_features) - each day = one token
         tokens = self.token_proj(x) + self.pos_embedding
         encoded = self.encoder(tokens)
-        pooled = encoded.mean(dim=1)  # mean pooling по временным шагам
+        pooled = encoded.mean(dim=1)  # mean pooling over time steps
         return self.head(pooled).squeeze(-1)
 
 
@@ -51,8 +51,8 @@ class InformerPredictor(SingleAssetAlgorithm):
     name = "Informer-lite Transformer Predictor"
     category = AlgorithmCategory.SEQUENCE_MODEL
     description = (
-        "Упрощённая (без ProbSparse-attention) аппроксимация Informer: self-attention "
-        "по полной последовательности дневных признаков, предсказывает вероятность роста цены."
+        "A simplified (without ProbSparse attention) approximation of Informer: self-attention "
+        "over the full sequence of daily features, predicts the probability of a price increase."
     )
 
     def __init__(
@@ -85,7 +85,7 @@ class InformerPredictor(SingleAssetAlgorithm):
         self.model: _InformerLiteNet | None = None
 
     def _make_sequences(self, X: np.ndarray, y: np.ndarray | None, seq_len: int):
-        """Скользящее окно длиной seq_len; таргет - значение y в последней точке окна."""
+        """Sliding window of length seq_len; target is the value of y at the last point of the window."""
         n = len(X)
         if n <= seq_len:
             empty_x = np.empty((0, seq_len, X.shape[1]), dtype=np.float32)

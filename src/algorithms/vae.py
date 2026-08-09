@@ -1,14 +1,14 @@
 """
-Variational Autoencoder (VAE) - вероятностная версия сжатия признаков в факторы.
+Variational Autoencoder (VAE) - a probabilistic version of compressing features into factors.
 
-в отличие от детерминированного autoencoder.py, VAE учит не точку в латентном пространстве, а распределение
-q(z|x) = N(mu, exp(log_var)), регуляризованное к N(0, 1) через KL-дивергенцию.
-Это должно давать более гладкое, менее переобученное латентное пространство
-(деноизинг из таблицы), ценой худшей точности реконструкции. Как и
-autoencoder.py, сам по себе VAE не торгует - поверх детерминированного mu
-(без сэмплирования на инференсе) обучается downstream-классификатор
-направления цены. Латентные факторы остаются неинтерпретируемыми (главная
-слабость строки #14).
+unlike the deterministic autoencoder.py, the VAE learns not a point in latent space but a distribution
+q(z|x) = N(mu, exp(log_var)), regularized toward N(0, 1) via the KL divergence.
+This should yield a smoother, less overfit latent space
+(the denoising benefit noted in the table), at the cost of worse reconstruction accuracy. As with
+autoencoder.py, the VAE by itself does not trade - on top of the deterministic mu
+(no sampling at inference time), a downstream classifier of price
+direction is trained. The latent factors remain uninterpretable (the main
+weakness of row #14).
 """
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ class VAEFactorModel(SingleAssetAlgorithm):
     name = "VAE Factor Model"
     category = AlgorithmCategory.REPRESENTATION_LEARNING
     description = (
-        "Вариационный автоэнкодер сжимает технические признаки в вероятностное латентное "
-        "пространство N(mu, sigma); поверх детерминированного mu обучается линейный классификатор."
+        "A variational autoencoder compresses technical features into a probabilistic latent "
+        "space N(mu, sigma); a linear classifier is trained on top of the deterministic mu."
     )
 
     def __init__(

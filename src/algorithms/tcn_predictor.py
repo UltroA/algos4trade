@@ -1,16 +1,16 @@
 """
-TCN (Temporal Convolutional Network) - causal dilated-свёртки по временному ряду.
+TCN (Temporal Convolutional Network) - causal dilated convolutions over the time series.
 
-то же назначение, что у LSTM/GRU (последовательности цен/объёмов/индикаторов),
-но за счёт параллельных dilated-свёрток обучается
-быстрее и стабильнее рекуррентных сетей. Главная слабость - фиксированное
-рецептивное поле: сеть не видит закономерности длиннее, чем позволяет глубина
-и dilation слоёв (здесь рецептивное поле = 1 + 2*(1+2+4) = 15 шагов при
+serves the same purpose as LSTM/GRU (sequences of prices/volumes/indicators),
+but thanks to parallel dilated convolutions it trains
+faster and more stably than recurrent networks. The main weakness is a fixed
+receptive field: the network cannot see patterns longer than the depth
+and dilation of the layers allow (here the receptive field = 1 + 2*(1+2+4) = 15 steps with
 kernel_size=3, dilations=[1,2,4]).
 
-Все свёртки - causal: паддинг добавляется только слева на (kernel_size-1)*dilation
-шагов и затем обрезается справа, чтобы предсказание в момент t никогда не
-использовало будущие значения (t+1, t+2, ...).
+All convolutions are causal: padding is added only on the left, for (kernel_size-1)*dilation
+steps, and then trimmed on the right, so the prediction at moment t never
+uses future values (t+1, t+2, ...).
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class _CausalConvBlock(nn.Module):
         # x: (batch, channels, seq_len)
         out = self.conv(x)
         if self.padding > 0:
-            out = out[:, :, : -self.padding]  # обрезаем "будущий" паддинг справа -> causal
+            out = out[:, :, : -self.padding]  # trim the "future" padding on the right -> causal
         return self.relu(out)
 
 
@@ -52,10 +52,10 @@ class _TCNNet(nn.Module):
         self.head = nn.Linear(hidden, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (batch, seq_len, n_features) -> (batch, n_features, seq_len) для Conv1d
+        # x: (batch, seq_len, n_features) -> (batch, n_features, seq_len) for Conv1d
         x = x.permute(0, 2, 1)
         h = self.blocks(x)  # (batch, hidden, seq_len)
-        last_step = h[:, :, -1]  # берём представление последнего временного шага
+        last_step = h[:, :, -1]  # take the representation of the last time step
         return self.head(last_step).squeeze(-1)
 
 
@@ -63,9 +63,9 @@ class TCNPredictor(SingleAssetAlgorithm):
     name = "TCN Predictor"
     category = AlgorithmCategory.SEQUENCE_MODEL
     description = (
-        "Temporal Convolutional Network с causal dilated-свёртками предсказывает вероятность "
-        "роста цены по окну технических признаков - быстрее и стабильнее LSTM, но с фиксированным "
-        "рецептивным полем."
+        "A Temporal Convolutional Network with causal dilated convolutions predicts the probability "
+        "of the price rising from a window of technical features - faster and more stable than LSTM, "
+        "but with a fixed receptive field."
     )
 
     def __init__(
@@ -98,7 +98,7 @@ class TCNPredictor(SingleAssetAlgorithm):
         self.model: _TCNNet | None = None
 
     def _make_sequences(self, X: np.ndarray, y: np.ndarray | None, seq_len: int):
-        """Скользящее окно длиной seq_len; таргет - значение y в последней точке окна."""
+        """Sliding window of length seq_len; the target is the value of y at the last point of the window."""
         n = len(X)
         if n <= seq_len:
             empty_x = np.empty((0, seq_len, X.shape[1]), dtype=np.float32)

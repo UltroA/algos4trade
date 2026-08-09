@@ -1,13 +1,14 @@
 """
-Random Forest - базовый бейзлайн и оценка важности признаков.
+Random Forest - a base baseline and feature importance estimate.
 
-ансамбль независимых деревьев решений (бэггинг) над теми
-же инженерными признаками, что и градиентный бустинг в lightgbm_ranker.py.
-Служит бейзлайном для сравнения с бустингом - обычно слабее (сглаживает редкие
-сигналы из-за усреднения по деревьям), но устойчивее к переобучению и даёт
-простую в интерпретации оценку важности признаков (impurity-based).
+An ensemble of independent decision trees (bagging) over the same
+engineered features as the gradient boosting in lightgbm_ranker.py.
+Serves as a baseline for comparison with boosting - usually weaker (smooths
+out rare signals due to averaging across trees), but more robust to
+overfitting and gives an easy-to-interpret feature importance estimate
+(impurity-based).
 
-Реалистичный уровень (см. docs/Алгоритмы.md): direction accuracy ~51-54%.
+Realistic level (see docs/Алгоритмы.md): direction accuracy ~51-54%.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ class RandomForestBaseline(SingleAssetAlgorithm):
     name = "Random Forest Baseline"
     category = AlgorithmCategory.SUPERVISED_RANKING
     description = (
-        "Базовый бейзлайн на бэггинге деревьев решений для прогноза направления цены и оценки "
-        "важности технических признаков."
+        "A base baseline using bagged decision trees for price direction forecasting and estimating "
+        "the importance of technical features."
     )
 
     def __init__(
@@ -81,7 +82,7 @@ class RandomForestBaseline(SingleAssetAlgorithm):
         return signal.reindex(data.index).fillna(0.0)
 
     def feature_importances(self) -> pd.Series:
-        """Impurity-based важность признаков обученного леса, по убыванию."""
+        """Impurity-based feature importance of the trained forest, in descending order."""
         if not self.is_fitted:
             return pd.Series(dtype=float)
         cols = self._trained_columns or [c for c in FEATURE_COLUMNS if c in self._trained_columns]
@@ -89,7 +90,7 @@ class RandomForestBaseline(SingleAssetAlgorithm):
 
 
 if __name__ == "__main__":
-    # Быстрая самопроверка на синтетических данных (без сети).
+    # Quick self-check on synthetic data (no network).
     import numpy as np
 
     rng = np.random.default_rng(0)

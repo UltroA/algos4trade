@@ -1,14 +1,14 @@
 """
-Прогревает кэш дневных свечей для расширенного универсума из 100 инструментов
-MOEX (scripts/moex_universe.TICKERS_100) - нужен для кросс-секционной
-валидации бенчмарка (scripts/run_benchmarks_wide.py).
+Warms the daily candle cache for the extended universe of 100 MOEX
+instruments (scripts/moex_universe.TICKERS_100) - needed for cross-sectional
+validation of the benchmark (scripts/run_benchmarks_wide.py).
 
-В отличие от prepare_data.py (10 тикеров, жёсткая проверка), здесь ошибки по
-отдельным тикерам (не найден в каталоге T-Invest, делистинг, нет истории)
-не прерывают загрузку остальных - они просто помечаются как FAILED и
-исключаются из дальнейшего анализа.
+Unlike prepare_data.py (10 tickers, hard failure), here errors on individual
+tickers (not found in the T-Invest catalog, delisted, no history) do not
+abort loading the rest - they are simply marked as FAILED and excluded
+from further analysis.
 
-Запуск: source .venv/bin/activate && python scripts/prepare_data_wide.py
+Run: source .venv/bin/activate && python scripts/prepare_data_wide.py
 """
 
 import sys
@@ -28,7 +28,7 @@ from moex_universe import TICKERS_100
 
 START = datetime(2019, 1, 1, tzinfo=timezone.utc)
 END = datetime.now(timezone.utc)
-MIN_ROWS = 300  # ~14 месяцев дневных данных - минимум для осмысленного 70/30 сплита
+MIN_ROWS = 300  # ~14 months of daily data - minimum for a meaningful 70/30 split
 
 
 def main() -> None:

@@ -1,20 +1,21 @@
 """
-Генетическое программирование / symbolic regression - автоматический поиск
-формул-альф (в духе WorldQuant "101 Formulaic Alphas").
+Genetic programming / symbolic regression - automated search for alpha
+formulas (in the spirit of WorldQuant "101 Formulaic Alphas").
 
-symbolic regression - "эволюционный алгоритм" комбинирует технические признаки
-арифметическими операциями (+, -, *, /, sqrt, abs, ...) в древовидные формулы
-и отбирает те, что лучше предсказывают fwd_return. Найденная формула
-интерпретируема (её можно прочитать как обычное математическое выражение) -
-это и есть заявленное преимущество перед "чёрными ящиками" вроде нейросетей.
+symbolic regression - an "evolutionary algorithm" combines technical features
+with arithmetic operations (+, -, *, /, sqrt, abs, ...) into tree-shaped
+formulas and selects those that best predict fwd_return. The discovered
+formula is interpretable (it can be read as an ordinary mathematical
+expression) - this is the claimed advantage over "black boxes" like neural
+networks.
 
-Главная слабость (см. таблицу): гигантский риск data mining bias - при большой
-популяции/числе поколений и множестве кандидатных признаков эволюция almost
-неизбежно находит формулу, которая просто переобучилась под шум train-выборки.
-Здесь эта угроза НИЧЕМ не смягчена, кроме parsimony_coefficient (штраф за
-сложность дерева) и обычного chronological train/test сплита бэктестера -
-поэтому out-of-sample результат этого алгоритма стоит расценивать особенно
-скептически.
+Main weakness (see table): huge data mining bias risk - with a large
+population/number of generations and many candidate features, evolution
+almost inevitably finds a formula that simply overfit the noise of the train
+split. Here this threat is mitigated by nothing except the
+parsimony_coefficient (penalty for tree complexity) and the backtester's
+usual chronological train/test split - so the out-of-sample result of this
+algorithm should be treated with particular skepticism.
 """
 
 from __future__ import annotations
@@ -33,8 +34,8 @@ class SymbolicRegressionAlpha(SingleAssetAlgorithm):
     name = "Symbolic Regression Alpha"
     category = AlgorithmCategory.SYMBOLIC_REGRESSION
     description = (
-        "Генетическое программирование эволюционирует интерпретируемую формулу-альфу из "
-        "технических признаков, предсказывающую будущую доходность. Высокий риск data mining bias."
+        "Genetic programming evolves an interpretable alpha formula from technical features "
+        "that predicts future returns. High risk of data mining bias."
     )
 
     def __init__(
@@ -87,7 +88,7 @@ class SymbolicRegressionAlpha(SingleAssetAlgorithm):
         return self
 
     def get_formula(self) -> str:
-        """Возвращает найденную эволюцией формулу-альфу в читаемом виде."""
+        """Returns the alpha formula found by evolution in readable form."""
         return self.formula_ or "<not fitted>"
 
     def generate_signals(self, data: pd.DataFrame) -> pd.Series:
@@ -121,10 +122,10 @@ if __name__ == "__main__":
     )
     train_df, test_df = chronological_split(dummy, 0.7)
 
-    # Уменьшенные параметры эволюции - только чтобы smoke-тест отрабатывал быстро.
+    # Reduced evolution parameters - just so the smoke test runs quickly.
     algo = SymbolicRegressionAlpha(population_size=300, generations=8)
     algo.fit(train_df)
-    print("Найденная формула-альфа:", algo.get_formula())
+    print("Found alpha formula:", algo.get_formula())
 
     signals = algo.generate_signals(test_df)
     print(signals.describe())

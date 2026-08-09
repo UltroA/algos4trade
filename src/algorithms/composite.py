@@ -1,32 +1,32 @@
 """
-Композитные алгоритмы: собирают уже реализованные "строительные блоки"
-бенчмарка в единый пайплайн генерация сигнала -> риск-оверлей -> сайзинг
-позиции / аллокация капитала, чтобы задокументированный недостаток одного
-компонента был закрыт задокументированной сильной стороной другого:
+Composite algorithms: assemble already-implemented "building blocks"
+of the benchmark into a single pipeline signal generation -> risk overlay -> position
+sizing / capital allocation, so that the documented weakness of one
+component is covered by the documented strength of another:
 
-  - Isolation Forest / One-Class SVM сами по себе не генерируют альфу
-    (торгуют примитивным SMA(10)/SMA(50)-кроссовером), но по итогам
-    кросс-секционной валидации на 97 тикерах оказались лучшим риск-оверлеем
-    (снижают частоту сделок в нестабильные периоды, mean SR 0.49/0.39,
-    доля тикеров с положительным SR 78%/66%). `AnomalyRiskOverlay` берёт их
-    детектор аномалий, но применяет его к сигналу ЛЮБОГО другого
-    single-asset алгоритма проекта вместо жёстко зашитого SMA-кроссовера.
-  - VAE и N-BEATS дают содержательный, но зашумлённый сигнал без какого-либо
-    риск-контроля (VAE: mean SR 0.12, mean MDD -10.5%; N-BEATS: mean SR
-    0.19, mean MDD -2.8%) - их недостаток (нет защиты от нестабильных
-    режимов) закрывается риск-оверлеем выше.
-  - PPO - лучший протестированный сайзер позиции, но переобучение RL с нуля
-    на каждом тикере/композите вычислительно дорого; `VolTargetSizer`
-    реализует ту же идею (не давать резких по размеру ставок) дешёвым
-    таргетированием волатильности вместо RL.
-  - Thompson Sampling Allocator сам по себе не создаёт альфу и, по выводам
-    расширенной валидации, "нуждается в более сильных базовых стратегиях,
-    чем сырой momentum" - `ThompsonWithStrongArms` заменяет momentum-"руки"
-    на произвольный композитный пайплайн (например, Elastic Net + risk
-    overlay), это прямая проверка того вывода.
+  - Isolation Forest / One-Class SVM do not generate alpha on their own
+    (they trade a primitive SMA(10)/SMA(50) crossover), but according to
+    cross-sectional validation on 97 tickers they turned out to be the best risk overlay
+    (they reduce trade frequency during unstable periods, mean SR 0.49/0.39,
+    share of tickers with positive SR 78%/66%). `AnomalyRiskOverlay` takes their
+    anomaly detector but applies it to the signal of ANY other
+    single-asset algorithm in the project instead of a hardcoded SMA crossover.
+  - VAE and N-BEATS give a meaningful but noisy signal without any
+    risk control (VAE: mean SR 0.12, mean MDD -10.5%; N-BEATS: mean SR
+    0.19, mean MDD -2.8%); their weakness (no protection against unstable
+    regimes) is closed by the risk overlay above.
+  - PPO is the best-tested position sizer, but retraining RL from scratch
+    on each ticker/composite is computationally expensive; `VolTargetSizer`
+    implements the same idea (avoid sharp bet-size swings) with cheap
+    volatility targeting instead of RL.
+  - The Thompson Sampling Allocator does not create alpha on its own and, per the
+    findings of the extended validation, "needs stronger base strategies
+    than raw momentum" - `ThompsonWithStrongArms` replaces the momentum "arms"
+    with an arbitrary composite pipeline (e.g. Elastic Net + risk
+    overlay); this is a direct test of that finding.
 
-Все классы реализуют стандартный интерфейс BaseTradingAlgorithm, поэтому
-встраиваются в BenchmarkRunner/Backtester наравне с обычными алгоритмами.
+All classes implement the standard BaseTradingAlgorithm interface, so they
+plug into BenchmarkRunner/Backtester just like regular algorithms.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ _DETECTOR_LABELS = {"isolation_forest": "Isolation Forest", "one_class_svm": "On
 
 
 class AnomalyRiskOverlay(SingleAssetAlgorithm):
-    """Базовый сигнал произвольного алгоритма, обнуляемый риск-оверлеем на аномальных днях."""
+    """Base signal from an arbitrary algorithm, zeroed out by a risk overlay on anomalous days."""
 
     category = AlgorithmCategory.COMPOSITE
 
@@ -73,8 +73,8 @@ class AnomalyRiskOverlay(SingleAssetAlgorithm):
         )
         self.name = f"{self.base_algo.name} + {_DETECTOR_LABELS[detector]} overlay"
         self.description = (
-            f"Композит: базовый сигнал '{self.base_algo.name}', обнуляемый риск-оверлеем "
-            f"({_DETECTOR_LABELS[detector]}) на днях, помеченных как аномальные."
+            f"Composite: base signal '{self.base_algo.name}', zeroed out by a risk overlay "
+            f"({_DETECTOR_LABELS[detector]}) on days flagged as anomalous."
         )
 
     def fit(self, train_data: pd.DataFrame) -> "AnomalyRiskOverlay":
@@ -101,7 +101,7 @@ class AnomalyRiskOverlay(SingleAssetAlgorithm):
             return pd.Series(0.0, index=data.index)
 
         Xt = self.scaler.transform(X) if self.scaler is not None else X
-        anomaly_flag = self.detector_model.predict(Xt)  # -1 = аномалия, 1 = норма
+        anomaly_flag = self.detector_model.predict(Xt)  # -1 = anomaly, 1 = normal
         is_normal = pd.Series(anomaly_flag == 1, index=X.index)
         risk_switch = is_normal.reindex(data.index).fillna(False).astype(float)
 
@@ -109,7 +109,7 @@ class AnomalyRiskOverlay(SingleAssetAlgorithm):
 
 
 class VolTargetSizer(SingleAssetAlgorithm):
-    """Масштабирует размер позиции базового алгоритма обратно пропорционально реализованной волатильности."""
+    """Scales the base algorithm's position size inversely proportional to realized volatility."""
 
     category = AlgorithmCategory.COMPOSITE
 
@@ -128,9 +128,9 @@ class VolTargetSizer(SingleAssetAlgorithm):
         self.max_scale = max_scale
         self.name = f"{self.base_algo.name} (vol-targeted sizing)"
         self.description = (
-            f"Композит: сигнал '{self.base_algo.name}', размер позиции масштабирован обратно "
-            f"пропорционально реализованной волатильности ({vol_window}-дневное окно) вместо "
-            f"фиксированного +-1 - дешёвая замена RL-сайзеру (PPO)."
+            f"Composite: signal '{self.base_algo.name}', position size scaled inversely "
+            f"proportional to realized volatility ({vol_window}-day window) instead of "
+            f"a fixed +-1 - a cheap replacement for an RL sizer (PPO)."
         )
 
     def fit(self, train_data: pd.DataFrame) -> "VolTargetSizer":
@@ -148,8 +148,8 @@ class VolTargetSizer(SingleAssetAlgorithm):
 
 
 class ThompsonWithStrongArms(MultiAssetAlgorithm):
-    """Thompson sampling аллокатор капитала (как в thompson_bandits.py), но "рукой" на каждом
-    тикере служит произвольный композитный пайплайн вместо сырого momentum-сигнала."""
+    """Thompson sampling capital allocator (as in thompson_bandits.py), but the "arm" for each
+    ticker is an arbitrary composite pipeline instead of a raw momentum signal."""
 
     category = AlgorithmCategory.CAPITAL_ALLOCATION
 
@@ -170,8 +170,8 @@ class ThompsonWithStrongArms(MultiAssetAlgorithm):
         self._beta: dict[str, float] = {}
         self.name = f"Thompson Sampling ({arm_label})"
         self.description = (
-            f"Байесовский многорукий бандит (Thompson sampling) распределяет капитал между "
-            f"тикерами, где каждая 'рука' - не сырой momentum, а полноценный пайплайн ({arm_label})."
+            f"Bayesian multi-armed bandit (Thompson sampling) allocates capital across "
+            f"tickers, where each 'arm' is not raw momentum but a full pipeline ({arm_label})."
         )
 
     def fit(self, train_data: dict[str, pd.DataFrame]) -> "ThompsonWithStrongArms":

@@ -1,16 +1,17 @@
 """
-One-Class SVM - детекция аномалий, риск-выключатель перед крахом.
+One-Class SVM - anomaly detection, a risk switch ahead of a crash.
 
-как и isolation_forest.py, модель не формирует сигнал сама, а обнаруживает аномальный рыночный режим и
-модулирует им базовый трендовый сигнал (SMA(10) vs SMA(50)), обнуляя позицию
-в аномальные дни ("риск-выключатель"). В отличие от Isolation Forest, One-Class
-SVM строит гиперповерхность вокруг "нормальных" точек в признаковом пространстве
-через RBF-ядро, поэтому чувствителен к масштабу признаков - обязательна
-стандартизация (StandardScaler, обученный на train).
+Like isolation_forest.py, the model does not form the signal itself, but detects an
+anomalous market regime and uses it to modulate a base trend signal
+(SMA(10) vs SMA(50)), zeroing out the position on anomalous days (a "risk
+switch"). Unlike Isolation Forest, One-Class SVM builds a hypersurface
+around "normal" points in feature space via an RBF kernel, so it is
+sensitive to feature scale - standardization (StandardScaler, fit on train)
+is mandatory.
 
-Реалистичный уровень: ловит 60-80% стрессовых дней. Главная слабость -
-много ложных срабатываний (модель реагирует на любые статистические выбросы
-в признаках, а не только на действительно неблагоприятные для стратегии дни).
+Realistic level: catches 60-80% of stress days. Main weakness - many false
+positives (the model reacts to any statistical outliers in the features, not
+only to days that are actually unfavorable for the strategy).
 """
 
 from __future__ import annotations
@@ -27,8 +28,8 @@ class OneClassSVMRiskSwitch(SingleAssetAlgorithm):
     name = "One-Class SVM Risk Switch"
     category = AlgorithmCategory.ANOMALY_DETECTION
     description = (
-        "One-Class SVM с RBF-ядром детектирует аномальные рыночные режимы и обнуляет позицию "
-        "базовой трендовой стратегии (SMA crossover) в такие дни - риск-выключатель перед крахом."
+        "One-Class SVM with an RBF kernel detects anomalous market regimes and zeroes out the position "
+        "of a base trend strategy (SMA crossover) on such days - a risk switch ahead of a crash."
     )
 
     def __init__(
@@ -80,7 +81,7 @@ class OneClassSVMRiskSwitch(SingleAssetAlgorithm):
             return pd.Series(0.0, index=data.index)
 
         X_scaled = self.scaler.transform(X)
-        anomaly_flag = self.model.predict(X_scaled)  # -1 = аномалия, 1 = норма
+        anomaly_flag = self.model.predict(X_scaled)  # -1 = anomaly, 1 = normal
         is_normal = pd.Series(anomaly_flag == 1, index=X.index)
 
         risk_switch = is_normal.reindex(data.index).fillna(False).astype(float)

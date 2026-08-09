@@ -1,4 +1,4 @@
-"""Загружает и кэширует исторические дневные свечи по набору ликвидных акций MOEX."""
+"""Loads and caches historical daily candles for a set of liquid MOEX stocks."""
 
 import sys
 from pathlib import Path

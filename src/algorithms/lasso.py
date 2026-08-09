@@ -1,14 +1,13 @@
 """
-Lasso - факторная модель, отбор признаков через L1-разреженность.
+Lasso - a factor model, feature selection via L1 sparsity.
 
-частный случай Elastic Net с l1_ratio=1 - чистая L1-регуляризация линейной регрессии на будущую доходность
-(fwd_return). Сильнее обнуляет веса нерелевантных признаков, чем Elastic Net,
-что даёт более разреженную и интерпретируемую модель ценой чуть большей
-неустойчивости коэффициентов при коррелированных признаках.
+a special case of Elastic Net with l1_ratio=1 - pure L1 regularization of a linear regression on future returns
+(fwd_return). Zeroes out weights of irrelevant features more aggressively than Elastic Net,
+which gives a sparser and more interpretable model at the cost of slightly
+less stable coefficients under correlated features.
 
-Реалистичный уровень (см. docs/Алгоритмы.md): низкая точность, высокая
-стабильность отобранного (разреженного) набора факторов. Только линейные
-зависимости.
+Realistic level (see docs/Алгоритмы.md): low accuracy, high stability
+of the selected (sparse) factor set. Linear relationships only.
 """
 
 from __future__ import annotations
@@ -26,8 +25,8 @@ class LassoFactorModel(SingleAssetAlgorithm):
     name = "Lasso Factor Model"
     category = AlgorithmCategory.LINEAR_FACTOR
     description = (
-        "Линейная факторная модель (Lasso) прогнозирует будущую доходность как разреженную "
-        "комбинацию технических признаков за счёт L1-регуляризации."
+        "A linear factor model (Lasso) predicts future returns as a sparse "
+        "combination of technical features via L1 regularization."
     )
 
     def __init__(
@@ -75,7 +74,7 @@ class LassoFactorModel(SingleAssetAlgorithm):
 
 
 if __name__ == "__main__":
-    # Быстрая самопроверка на синтетических данных (без сети).
+    # Quick self-check on synthetic data (no network).
     rng = np.random.default_rng(0)
     n = 400
     price = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))

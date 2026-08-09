@@ -1,25 +1,25 @@
 """
-Бенчмарк композитных пайплайнов (src/algorithms/composite.py): объединяют
-уже протестированные алгоритмы так, чтобы задокументированный недостаток
-одного покрывался задокументированной сильной стороной другого. См.
-docstring composite.py для обоснования каждой комбинации.
+Benchmark of composite pipelines (src/algorithms/composite.py): combine
+already-tested algorithms so that one's documented weakness is covered by
+another's documented strength. See composite.py's docstring for the
+rationale behind each combination.
 
-Тестируемые композиты:
-  - VAE + Isolation Forest overlay          (single-asset)
-  - N-BEATS + One-Class SVM overlay          (single-asset)
-  - Elastic Net + Isolation Forest overlay + vol-targeted sizing  (single-asset, 3 звена)
-  - Thompson Sampling с "сильными руками" = Elastic Net + Isolation Forest overlay (multi-asset)
+Composites tested:
+  - VAE + Isolation Forest overlay            (single-asset)
+  - N-BEATS + One-Class SVM overlay            (single-asset)
+  - Elastic Net + Isolation Forest overlay + vol-targeted sizing  (single-asset, 3-stage)
+  - Thompson Sampling with "strong arms" = Elastic Net + Isolation Forest overlay (multi-asset)
 
-Каждый single-asset композит прогоняется:
-  (a) на SBER - для прямого сопоставления с базовым (10-тикерным) прогоном;
-  (b) кросс-секционно на 97 тикерах MOEXBMI - для сопоставления с расширенной
-      валидацией (те же агрегаты: mean/median Sharpe, доля положительных).
+Each single-asset composite is run:
+  (a) on SBER - for direct comparison with the baseline (10-ticker) run;
+  (b) cross-sectionally on 97 MOEXBMI tickers - for comparison with the wide
+      validation (same aggregates: mean/median Sharpe, share positive).
 
-Thompson-с-сильными-руками прогоняется на baseline-10, на 70-тикерном
-календарно согласованном наборе и на полном наборе 97 тикеров - для прямого
-сопоставления с results/benchmark_results.json и results/benchmark_results_wide.json.
+Thompson-with-strong-arms is run on baseline-10, on a 70-ticker calendar-
+aligned set, and on the full 97-ticker set - for direct comparison with
+results/benchmark_results.json and results/benchmark_results_wide.json.
 
-Запуск: source .venv/bin/activate && python scripts/run_composite_benchmarks.py
+Run: source .venv/bin/activate && python scripts/run_composite_benchmarks.py
 """
 
 import json

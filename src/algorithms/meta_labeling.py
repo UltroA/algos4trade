@@ -1,13 +1,13 @@
 """
-Meta-labeling (Лопес де Прадо) - второй слой ML фильтрует сделки первичной модели.
+Meta-labeling (Lopez de Prado) - a second ML layer filters the primary model's trades.
 
-первичная (простая, детерминированная) модель выдаёт
-базовый торговый сигнал направления. Вторичная ML-модель не пытается угадать
-направление сама - она учится предсказывать, будет ли КОНКРЕТНАЯ сделка по
-первичному сигналу прибыльной, и взвешивает уверенность в сигнале. Это
-поднимает winrate на 5-15 п.п. (см. таблицу), но не создаёт альфу с нуля:
-если первичный сигнал систематически ошибается, мета-модель может только
-приглушить его, а не развернуть в противоположную сторону.
+A primary (simple, deterministic) model outputs a
+base directional trading signal. A secondary ML model does not try to guess
+the direction itself - it learns to predict whether a SPECIFIC trade from the
+primary signal will be profitable, and weights confidence in the signal. This
+raises winrate by 5-15 pp (see table), but does not create alpha from
+scratch: if the primary signal is systematically wrong, the meta-model can
+only mute it, not reverse it into the opposite direction.
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ class MetaLabelingModel(SingleAssetAlgorithm):
     name = "Meta-Labeling (Lopez de Prado)"
     category = AlgorithmCategory.META_LABELING
     description = (
-        "Первичное правило (пересечение SMA) задаёт направление сделки, вторичная модель "
-        "градиентного бустинга предсказывает вероятность того, что эта сделка окажется прибыльной, "
-        "и масштабирует силу сигнала этой вероятностью - фильтр, а не самостоятельный источник альфы."
+        "A primary rule (SMA crossover) sets the trade direction, a secondary gradient boosting "
+        "model predicts the probability that this trade will be profitable, "
+        "and scales the signal strength by that probability - a filter, not a standalone source of alpha."
     )
 
     def __init__(
@@ -60,7 +60,7 @@ class MetaLabelingModel(SingleAssetAlgorithm):
         self._feature_cols: list[str] = []
 
     def _primary_signal(self, df: pd.DataFrame) -> pd.Series:
-        """Простое правило: +1 если SMA(fast) > SMA(slow), -1 если наоборот, 0 если недостаточно данных."""
+        """Simple rule: +1 if SMA(fast) > SMA(slow), -1 if the opposite, 0 if not enough data."""
         sma_fast = df["close"].rolling(self.primary_fast).mean()
         sma_slow = df["close"].rolling(self.primary_slow).mean()
         signal = pd.Series(0.0, index=df.index)
@@ -112,8 +112,8 @@ class MetaLabelingModel(SingleAssetAlgorithm):
         confidence = pd.Series((proba_success - 0.5) * 2.0, index=clean.index)  # -> [-1, 1]
 
         combined = (primary.reindex(clean.index) * confidence.clip(lower=0.0))
-        # confidence < 0 (мета-модель считает сделку скорее убыточной) -> сигнал гасится в 0,
-        # а не разворачивается: мета-модель фильтрует, а не создаёт альфу (см. докстринг).
+        # confidence < 0 (meta-model thinks the trade is more likely unprofitable) -> signal is muted to 0,
+        # not reversed: the meta-model filters rather than creates alpha (see docstring).
         signal = combined.clip(-1.0, 1.0)
         return signal.reindex(data.index).fillna(0.0)
 

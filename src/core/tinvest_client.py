@@ -1,15 +1,16 @@
 """
-Тонкий REST-клиент к T-Invest API (Т-Банк Инвестиции).
+Thin REST client for the T-Invest API (T-Bank Investments).
 
-Официальный gRPC SDK (пакет ``tinkoff-investments``) на момент написания
-недоступен на PyPI, поэтому используется публичный REST/JSON-шлюз
-(grpc-gateway) T-Invest API: https://invest-public-api.tinkoff.ru/rest/...
+The official gRPC SDK (the ``tinkoff-investments`` package) is not
+available on PyPI at the time of writing, so the public REST/JSON gateway
+(grpc-gateway) of the T-Invest API is used instead: https://invest-public-api.tinkoff.ru/rest/...
 
-Домен ``tinkoff.ru`` отдаёт сертификат, выпущенный корневым
-удостоверяющим центром Минцифры России ("Russian Trusted Root CA"),
-который по умолчанию не входит в системные доверенные хранilища за
-пределами РФ. Поэтому клиент проверяет TLS-цепочку по объединённому
-бандлу: стандартный certifi + сертификаты Минцифры (``certs/russian_trusted_ca.pem``).
+The ``tinkoff.ru`` domain serves a certificate issued by the Russian
+Ministry of Digital Development's root certification authority
+("Russian Trusted Root CA"), which is not included in system trusted
+stores outside Russia by default. So the client verifies the TLS chain
+against a combined bundle: standard certifi + the Ministry of Digital
+Development's certificates (``certs/russian_trusted_ca.pem``).
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ _RU_CA_BUNDLE = _CERTS_DIR / "russian_trusted_ca.pem"
 
 
 def _build_ca_bundle() -> str:
-    """Возвращает путь к CA-бандлу: certifi + Russian Trusted CA (если есть)."""
+    """Returns the path to the CA bundle: certifi + Russian Trusted CA (if present)."""
     if not _RU_CA_BUNDLE.exists():
         return certifi.where()
 
@@ -48,15 +49,15 @@ def _build_ca_bundle() -> str:
 
 
 class TInvestAPIError(RuntimeError):
-    """Ошибка ответа T-Invest API (HTTP-статус или gRPC-status в теле)."""
+    """T-Invest API response error (HTTP status or gRPC status in the body)."""
 
 
 class TInvestClient:
     """
-    Минимальный синхронный REST-клиент T-Invest API.
+    Minimal synchronous T-Invest API REST client.
 
-    Реализует только вызовы, необходимые для получения исторических
-    данных и метаданных инструментов (без выставления заявок).
+    Implements only the calls needed to fetch historical data and
+    instrument metadata (no order placement).
     """
 
     def __init__(self, token: str | None = None, timeout: float = 30.0, max_retries: int = 3):
@@ -77,7 +78,7 @@ class TInvestClient:
         )
 
     def call(self, service: str, method: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Вызов произвольного метода T-Invest gRPC-gateway по HTTP/JSON."""
+        """Call an arbitrary T-Invest gRPC-gateway method over HTTP/JSON."""
         url = f"{_BASE_URL}/tinkoff.public.invest.api.contract.v1.{service}/{method}"
         last_error: Exception | None = None
         for attempt in range(self._max_retries):
@@ -104,7 +105,7 @@ class TInvestClient:
         return self.call("UsersService", "GetAccounts").get("accounts", [])
 
     def find_share_by_ticker(self, ticker: str, class_code: str = "TQBR") -> dict[str, Any]:
-        """Ищет акцию по тикеру среди базовых инструментов (по умолчанию режим торгов MOEX TQBR)."""
+        """Looks up a share by ticker among base instruments (default trading mode is MOEX TQBR)."""
         result = self.call(
             "InstrumentsService",
             "FindInstrument",
@@ -126,7 +127,7 @@ class TInvestClient:
         to_iso: str,
         interval: str = "CANDLE_INTERVAL_DAY",
     ) -> list[dict[str, Any]]:
-        """Одна страница свечей (с учётом ограничений API по длине интервала на запрос)."""
+        """A single page of candles (subject to the API's limits on interval length per request)."""
         candles: list[dict[str, Any]] = []
         page_token = ""
         while True:

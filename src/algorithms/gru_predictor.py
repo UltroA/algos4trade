@@ -1,13 +1,14 @@
 """
-GRU - более лёгкая рекуррентная альтернатива LSTM.
+GRU - a lighter recurrent alternative to LSTM.
 
-GRU (LSTM/GRU): GRU-ячейка объединяет forget/input гейты LSTM
-в один update-гейт, за счёт чего быстрее обучается и имеет меньше параметров
-при сопоставимом качестве на коротких финансовых рядах. Как и LSTM, читает
-окно последних `seq_len` дней инженерных признаков (core.features.make_features)
-и предсказывает вероятность роста цены на горизонте `horizon` дней.
-Реалистичный уровень: direction accuracy ~51-55%, часто не бьёт градиентный
-бустинг; переобучение на шуме остаётся главным риском.
+GRU (LSTM/GRU): the GRU cell merges LSTM's forget/input gates
+into a single update gate, which makes it train faster and have fewer
+parameters at comparable quality on short financial series. Like LSTM, it
+reads a window of the last `seq_len` days of engineered features
+(core.features.make_features) and predicts the probability of a price
+increase over the `horizon`-day horizon.
+Realistic level: direction accuracy ~51-55%, often does not beat gradient
+boosting; overfitting to noise remains the main risk.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ class _GRUNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (batch, seq_len, n_features)
         _, h_n = self.gru(x)
-        last_hidden = h_n[-1]  # (batch, hidden) - скрытое состояние последнего слоя на последнем шаге
+        last_hidden = h_n[-1]  # (batch, hidden) - hidden state of the last layer at the last step
         return self.head(last_hidden).squeeze(-1)
 
 
@@ -39,8 +40,8 @@ class GRUPredictor(SingleAssetAlgorithm):
     name = "GRU Predictor"
     category = AlgorithmCategory.SEQUENCE_MODEL
     description = (
-        "Рекуррентная сеть (GRU) над окном последних технических признаков предсказывает "
-        "вероятность роста цены на заданном горизонте - более лёгкая альтернатива LSTM."
+        "A recurrent network (GRU) over a window of recent technical features predicts "
+        "the probability of a price increase at a given horizon - a lighter alternative to LSTM."
     )
 
     def __init__(
@@ -71,7 +72,7 @@ class GRUPredictor(SingleAssetAlgorithm):
         self.model: _GRUNet | None = None
 
     def _make_sequences(self, X: np.ndarray, y: np.ndarray | None, seq_len: int):
-        """Скользящее окно длиной seq_len; таргет - значение y в последней точке окна."""
+        """Sliding window of length seq_len; target is the value of y at the last point of the window."""
         n = len(X)
         if n <= seq_len:
             empty_x = np.empty((0, seq_len, X.shape[1]), dtype=np.float32)

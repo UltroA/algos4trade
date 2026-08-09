@@ -1,15 +1,15 @@
 """
-XGBoost - кросс-секционный ранкинг/прогноз направления доходности.
+XGBoost - cross-sectional ranking/prediction of return direction.
 
-Табличная строка #1 (LightGBM/XGBoost/CatBoost): альтернативная реализация
-градиентного бустинга над теми же инженерными признаками (моментум,
-волатильность, RSI, MACD, объём), что и в lightgbm_ranker.py. Признаки строятся
-в core.features.make_features - единообразно для всех бустинговых/линейных
-моделей проекта, чтобы результаты бенчмарка были сравнимы.
+Table row #1 (LightGBM/XGBoost/CatBoost): an alternative gradient boosting
+implementation over the same engineered features (momentum,
+volatility, RSI, MACD, volume) as in lightgbm_ranker.py. Features are built
+in core.features.make_features - uniformly for all boosting/linear
+models in the project, so benchmark results are comparable.
 
-Реалистичный уровень (см. docs/Алгоритмы.md): direction accuracy ~52-56%,
-IC 0.02-0.05. Переобучение на шумных финансовых фичах смягчено неглубокими
-деревьями (max_depth=4) и подвыборкой строк/колонок.
+Realistic level (see docs/Алгоритмы.md): direction accuracy ~52-56%,
+IC 0.02-0.05. Overfitting on noisy financial features is mitigated by shallow
+trees (max_depth=4) and row/column subsampling.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ class XGBoostRanker(SingleAssetAlgorithm):
     name = "XGBoost Ranker"
     category = AlgorithmCategory.SUPERVISED_RANKING
     description = (
-        "Кросс-секционный ранкинг акций по ожидаемой доходности через градиентный бустинг XGBoost "
-        "над техническими признаками. Основное применение - скоринг направления движения цены."
+        "Cross-sectional ranking of stocks by expected return via XGBoost gradient boosting "
+        "over technical features. Main use case - scoring the direction of price movement."
     )
 
     def __init__(
@@ -85,7 +85,7 @@ class XGBoostRanker(SingleAssetAlgorithm):
 
 
 if __name__ == "__main__":
-    # Быстрая самопроверка на синтетических данных (без сети).
+    # Quick self-check on synthetic data (no network).
     import numpy as np
 
     rng = np.random.default_rng(0)

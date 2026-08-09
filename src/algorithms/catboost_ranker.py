@@ -1,12 +1,12 @@
 """
-CatBoost - кросс-секционный ранкинг/прогноз направления доходности.
+CatBoost - cross-sectional ranking/prediction of return direction.
 
-LightGBM(XGBoost/CatBoost):  реализация градиентного бустинга над теми же
-инженерными признаками (моментум, волатильность, RSI, MACD, объём),
-что и в lightgbm_ranker.py / xgboost_ranker.py. CatBoost использует ordered boosting,
-что делает его несколько устойчивее к переобучению на шумных финансовых фичах по сравнению с классическим GBDT.
+LightGBM(XGBoost/CatBoost): a gradient boosting implementation over the same
+engineered features (momentum, volatility, RSI, MACD, volume)
+as in lightgbm_ranker.py / xgboost_ranker.py. CatBoost uses ordered boosting,
+which makes it somewhat more resistant to overfitting on noisy financial features compared to classic GBDT.
 
-Реалистичный уровень (см. docs/Алгоритмы.md): direction accuracy ~52-56%,
+Realistic level (see docs/Алгоритмы.md): direction accuracy ~52-56%,
 IC 0.02-0.05.
 """
 
@@ -23,8 +23,8 @@ class CatBoostRanker(SingleAssetAlgorithm):
     name = "CatBoost Ranker"
     category = AlgorithmCategory.SUPERVISED_RANKING
     description = (
-        "Кросс-секционный ранкинг акций по ожидаемой доходности через градиентный бустинг CatBoost "
-        "(ordered boosting) над техническими признаками. Основное применение - скоринг направления цены."
+        "Cross-sectional ranking of stocks by expected return via CatBoost gradient boosting "
+        "(ordered boosting) over technical features. Main use case is scoring price direction."
     )
 
     def __init__(
@@ -82,7 +82,7 @@ class CatBoostRanker(SingleAssetAlgorithm):
 
 
 if __name__ == "__main__":
-    # Быстрая самопроверка на синтетических данных (без сети).
+    # Quick self-check on synthetic data (no network).
     import numpy as np
 
     rng = np.random.default_rng(0)

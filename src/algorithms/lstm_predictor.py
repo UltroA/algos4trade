@@ -1,13 +1,13 @@
 """
-LSTM - последовательности цен, объёмов, потока заявок.
+LSTM - sequences of prices, volumes, order flow.
 
-рекуррентная сеть с LSTM-ячейками читает окно последних
-`seq_len` дней инженерных признаков (моментум, волатильность, RSI, MACD, объём
-из core.features.make_features) и предсказывает вероятность роста цены на
-горизонте `horizon` дней. Реалистичный уровень (см. docs/Алгоритмы.md):
-direction accuracy ~51-55%, часто не бьёт градиентный бустинг; при этом LSTM
-долго обучается и легко переобучается на коротких финансовых рядах - здесь
-это отчасти сдерживается небольшим скрытым размером и умеренным числом эпох.
+A recurrent network with LSTM cells reads a window of the last
+`seq_len` days of engineered features (momentum, volatility, RSI, MACD, volume
+from core.features.make_features) and predicts the probability of price
+increase over a `horizon`-day horizon. Realistic level (see docs/Алгоритмы.md):
+direction accuracy ~51-55%, often does not beat gradient boosting; LSTM also
+trains slowly and overfits easily on short financial series - here this is
+partly mitigated by a small hidden size and a moderate number of epochs.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class _LSTMNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (batch, seq_len, n_features)
         _, (h_n, _) = self.lstm(x)
-        last_hidden = h_n[-1]  # (batch, hidden) - скрытое состояние последнего слоя на последнем шаге
+        last_hidden = h_n[-1]  # (batch, hidden) - hidden state of the last layer at the last step
         return self.head(last_hidden).squeeze(-1)
 
 
@@ -39,8 +39,8 @@ class LSTMPredictor(SingleAssetAlgorithm):
     name = "LSTM Predictor"
     category = AlgorithmCategory.SEQUENCE_MODEL
     description = (
-        "Рекуррентная сеть (LSTM) над окном последних технических признаков предсказывает "
-        "вероятность роста цены на заданном горизонте по последовательности цен и объёмов."
+        "A recurrent network (LSTM) over a window of recent technical features predicts "
+        "the probability of price increase over a given horizon from the sequence of prices and volumes."
     )
 
     def __init__(
@@ -71,7 +71,7 @@ class LSTMPredictor(SingleAssetAlgorithm):
         self.model: _LSTMNet | None = None
 
     def _make_sequences(self, X: np.ndarray, y: np.ndarray | None, seq_len: int):
-        """Скользящее окно длиной seq_len; таргет - значение y в последней точке окна."""
+        """Sliding window of length seq_len; target is the value of y at the last point of the window."""
         n = len(X)
         if n <= seq_len:
             empty_x = np.empty((0, seq_len, X.shape[1]), dtype=np.float32)

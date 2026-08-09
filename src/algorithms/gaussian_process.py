@@ -1,20 +1,20 @@
 """
-Гауссовы процессы / байесовская оптимизация - подбор гиперпараметров и оценка
-неопределённости прогноза.
+Gaussian processes / Bayesian optimization - hyperparameter tuning and
+prediction uncertainty estimation.
 
-GP-регрессия предсказывает будущую доходность (fwd_return)
-и, что важнее, даёт калиброванную оценку неопределённости прогноза (std). Это
-позволяет буквально "не торговать при низкой уверенности" - если предсказанное
-std выше порога, вычисленного на train, сигнал принудительно обнуляется.
+GP regression predicts future return (fwd_return)
+and, more importantly, gives a calibrated estimate of prediction uncertainty (std). This
+literally allows for "not trading when confidence is low" - if the predicted
+std exceeds a threshold computed on train, the signal is forced to zero.
 
-Перед основным обучением делается простая байесовская оптимизация гиперпараметров
-ядра (length_scale, alpha): случайный перебор нескольких кандидатов, выбор по
-log-marginal-likelihood на train (аналог оптимизации гиперпараметров из таблицы,
-без внешних библиотек вроде optuna/skopt).
+Before the main training, a simple Bayesian optimization of kernel
+hyperparameters (length_scale, alpha) is performed: a random search over several candidates,
+selected by log-marginal-likelihood on train (an analog of the hyperparameter optimization
+from the table, without external libraries like optuna/skopt).
 
-Главная слабость (см. таблицу): GP плохо масштабируется по данным (обучение
-O(n^3) по числу точек) - поэтому здесь обучающая выборка обрезается до последних
-`max_train_points` точек train-периода, если данных больше.
+Main weakness (see table): GP scales poorly with data (training is
+O(n^3) in the number of points) - so here the training set is truncated to the last
+`max_train_points` points of the train period if there is more data than that.
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ class GaussianProcessTrader(SingleAssetAlgorithm):
     name = "Gaussian Process Trader"
     category = AlgorithmCategory.BAYESIAN_OPTIMIZATION
     description = (
-        "GP-регрессия прогнозирует будущую доходность и её неопределённость (std); "
-        "торговля пропускается, когда модель недостаточно уверена в прогнозе."
+        "GP regression predicts future return and its uncertainty (std); "
+        "trading is skipped when the model is not sufficiently confident in its prediction."
     )
 
     def __init__(
@@ -74,7 +74,7 @@ class GaussianProcessTrader(SingleAssetAlgorithm):
         self._std_threshold: float = np.inf
 
     def _select_hyperparams(self, X: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-        """Простая байесовская оптимизация: случайный перебор (length_scale, alpha) по log-marginal-likelihood."""
+        """Simple Bayesian optimization: random search over (length_scale, alpha) by log-marginal-likelihood."""
         best_score = -np.inf
         best_params = (1.0, 1e-2)
         length_scales = self._rng.uniform(0.3, 5.0, size=self.n_hparam_candidates)
@@ -140,7 +140,7 @@ class GaussianProcessTrader(SingleAssetAlgorithm):
         pred, std = self.model.predict(X, return_std=True)
 
         raw_signal = np.tanh(pred * self.signal_strength)
-        raw_signal[std > self._std_threshold] = 0.0  # низкая уверенность -> не торгуем
+        raw_signal[std > self._std_threshold] = 0.0  # low confidence -> don't trade
 
         signal = pd.Series(raw_signal, index=X_df.index).clip(-1.0, 1.0)
         return signal.reindex(data.index).fillna(0.0)

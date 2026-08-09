@@ -1,12 +1,12 @@
 """
-Correlation clustering - простая альтернатива HDBSCAN для поиска корзин активов.
+Correlation clustering - simple alternative to HDBSCAN for finding asset baskets.
 
-Табличная строка #8 (второй метод той же строки): вместо плотностной
-кластеризации по сырым доходностям используется прямой порог по попарной
-корреляции доходностей - жадный алгоритм группирует активы, чья корреляция
-с "затравочным" активом кластера выше `corr_threshold`. Проще и детерминированнее
-HDBSCAN, но так же подвержен нестабильности кластеров во времени (см. таблицу):
-корреляции, посчитанные на train, могут не сохраняться на test-периоде.
+Table row #8 (second method for the same row): instead of density-based
+clustering on raw returns, a direct threshold on pairwise
+correlation of returns is used - a greedy algorithm groups assets whose correlation
+with a cluster's "seed" asset is above `corr_threshold`. Simpler and more deterministic
+than HDBSCAN, but equally prone to cluster instability over time (see table):
+correlations computed on train may not hold in the test period.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ class CorrelationClustering(MultiAssetAlgorithm):
     name = "Correlation Clustering"
     category = AlgorithmCategory.CLUSTERING
     description = (
-        "Жадная кластеризация активов по попарной корреляции доходностей (порог corr_threshold); "
-        "внутри каждой группы торгуется возврат к среднему цены актива относительно среднего по группе."
+        "Greedy clustering of assets by pairwise return correlation (corr_threshold threshold); "
+        "within each group, mean reversion of the asset's price relative to the group average is traded."
     )
 
     def __init__(

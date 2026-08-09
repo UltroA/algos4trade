@@ -1,13 +1,13 @@
 """
-Random Position - справочная базовая линия: позиция +-1 с равной
-вероятностью на каждом шаге, как нулевая гипотеза "предсказательной силы
-нет вообще".
+Random Position - reference baseline: position +-1 with equal
+probability at each step, as the null hypothesis of "no predictive power
+whatsoever".
 
-`AlgorithmCategory.BASELINE`, не входит в общее число алгоритмов.
-Сид фиксирован (seed=42) ради воспроизводимости между прогонами - это
-намеренно одна и та же случайная последовательность на каждом тикере, а не
-ансамбль по сидам; интерпретировать как единичную реализацию нулевой
-гипотезы, а не как её ожидаемое значение.
+`AlgorithmCategory.BASELINE`, not included in the total algorithm count.
+The seed is fixed (seed=42) for reproducibility between runs - this is
+intentionally the same random sequence on every ticker, not an
+ensemble over seeds; interpret it as a single realization of the null
+hypothesis, not as its expected value.
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ class RandomPositionBaseline(SingleAssetAlgorithm):
     name = "Random Position Baseline"
     category = AlgorithmCategory.BASELINE
     description = (
-        "Справочная базовая линия: позиция +1/-1 с вероятностью 0.5 на "
-        "каждом шаге (фиксированный сид). Нулевая гипотеза отсутствия "
-        "предсказательной силы."
+        "Reference baseline: position +1/-1 with probability 0.5 at "
+        "each step (fixed seed). The null hypothesis of no "
+        "predictive power."
     )
 
     def __init__(self, seed: int = 42, **kwargs):

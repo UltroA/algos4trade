@@ -1,14 +1,15 @@
 """
-PPO (Proximal Policy Optimization) - RL для оптимизации размера позиции.
+PPO (Proximal Policy Optimization) - RL for position size optimization.
 
-RL реально работает в задачах исполнения ордеров/сайзинга позиции, но в задаче генерации сигналов почти всегда
-переобучается на бэктесте - этот риск здесь не устранён (задача учебная),
-только частично смягчён небольшим числом эпох и энтропийным бонусом.
+RL genuinely works for order execution/position sizing tasks, but for signal generation it almost always
+overfits the backtest - this risk is not eliminated here (this is a
+learning exercise), only partially mitigated by a small number of epochs
+and an entropy bonus.
 
-Агент торгует ОДНИМ активом в core.trading_env.TradingEnv: состояние - окно
-последних доходностей + текущая позиция, действие - целевая позиция [-1, 1]
-(непрерывная, через tanh на выходе политики), награда - доходность портфеля
-за шаг минус издержки на изменение позиции.
+The agent trades ONE asset in core.trading_env.TradingEnv: the state is a
+window of recent returns + the current position, the action is the target
+position [-1, 1] (continuous, via tanh at the policy output), the reward is
+portfolio return per step minus the cost of changing the position.
 """
 
 from __future__ import annotations
@@ -43,8 +44,8 @@ class PPOAgent(SingleAssetAlgorithm):
     name = "PPO Position Sizer"
     category = AlgorithmCategory.REINFORCEMENT_LEARNING
     description = (
-        "RL-агент (Proximal Policy Optimization) учится выбирать непрерывный размер позиции "
-        "[-1, 1], максимизируя доходность за вычетом издержек на сделку."
+        "An RL agent (Proximal Policy Optimization) learns to choose a continuous position size "
+        "[-1, 1], maximizing return net of trading costs."
     )
 
     def __init__(

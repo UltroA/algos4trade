@@ -1,15 +1,15 @@
 """
-Многорукие бандиты / Thompson sampling - распределение капитала между стратегиями.
+Multi-armed bandits / Thompson sampling - allocating capital between strategies.
 
-Сам по себе не генерирует торговый сигнал (главная
-слабость из таблицы), а решает, какой из уже существующих "рукавов" (здесь -
-простая momentum-стратегия по каждому тикеру из data) получает капитал в
-следующем периоде. Каждый актив = одна "рука". Апостериорное распределение
-ожидаемой доходности руки - Beta(успехи, неудачи) на основе знака дневной
-доходности momentum-сигнала; на каждом шаге сэмплируется по одному значению
-на руку (Thompson sampling), капитал распределяется на активы с наибольшим
-сэмплом (soft allocation через softmax сэмплов, чтобы не концентрировать
-100% в одном активе и не требовать целочисленных лотов).
+On its own does not generate a trading signal (the main
+weakness noted in the table); instead it decides which of the already-existing "arms" (here -
+a simple momentum strategy for each ticker in data) receives capital in the
+next period. Each asset = one "arm". The posterior distribution of an
+arm's expected return is Beta(successes, failures) based on the sign of the daily
+return of the momentum signal; at each step one value is sampled per
+arm (Thompson sampling), and capital is allocated to the assets with the highest
+sample (soft allocation via softmax of the samples, so as not to concentrate
+100% into one asset and not require integer lot sizes).
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ class ThompsonSamplingAllocator(MultiAssetAlgorithm):
     name = "Thompson Sampling Capital Allocator"
     category = AlgorithmCategory.CAPITAL_ALLOCATION
     description = (
-        "Байесовский многорукий бандит (Thompson sampling) распределяет капитал между "
-        "momentum-стратегиями по разным активам, отдавая предпочтение тем, что чаще выигрывали."
+        "A Bayesian multi-armed bandit (Thompson sampling) allocates capital between "
+        "momentum strategies across different assets, favoring the ones that have won more often."
     )
 
     def __init__(self, momentum_window: int = 10, seed: int = 0, max_weight: float = 1.0, **kwargs):
@@ -33,13 +33,13 @@ class ThompsonSamplingAllocator(MultiAssetAlgorithm):
         self.momentum_window = momentum_window
         self.max_weight = max_weight
         self._rng = np.random.default_rng(seed)
-        # Параметры Beta-апостериора по каждой "руке" (тикеру): alpha=успехи+1, beta=неудачи+1.
+        # Beta-posterior parameters for each "arm" (ticker): alpha=successes+1, beta=failures+1.
         self._alpha: dict[str, float] = {}
         self._beta: dict[str, float] = {}
 
     @staticmethod
     def _momentum_signal(df: pd.DataFrame, window: int) -> pd.Series:
-        """Базовая стратегия внутри каждой руки: лонг, если моментум за window дней положительный."""
+        """Base strategy within each arm: long if the momentum over window days is positive."""
         momentum = df["close"].pct_change(window)
         return np.sign(momentum).fillna(0.0)
 
@@ -71,7 +71,7 @@ class ThompsonSamplingAllocator(MultiAssetAlgorithm):
         weights_over_time: dict[str, list[float]] = {t: [] for t in tickers}
         for _ in common_index:
             samples = np.array([self._rng.beta(alpha[t], beta_param[t]) for t in tickers])
-            exp_samples = np.exp((samples - samples.max()) * 5.0)  # температура 5.0 заостряет выбор
+            exp_samples = np.exp((samples - samples.max()) * 5.0)  # temperature 5.0 sharpens the choice
             weights = exp_samples / exp_samples.sum()
             for t, w in zip(tickers, weights):
                 weights_over_time[t].append(min(w, self.max_weight))

@@ -1,18 +1,18 @@
 """
-N-HiTS - эволюция N-BEATS с иерархической многочастотной дискретизацией.
+N-HiTS - an evolution of N-BEATS with hierarchical multi-rate sampling.
 
-тот же класс задач, что и N-BEATS
-(src/algorithms/nbeats.py) - чистое прогнозирование ряда доходностей без
-внешних признаков, сильные бенчмарки на M-соревнованиях, но "прогноз цены ≠
-прибыльная стратегия" (главная слабость: прогноз здесь конвертируется в
-позицию отдельным наивным правилом, а не оптимизируется под PnL).
+The same class of problems as N-BEATS
+(src/algorithms/nbeats.py) - pure forecasting of the returns series without
+external features, strong benchmarks in the M-competitions, but "price
+forecast != profitable strategy" (main weakness: the forecast here is
+converted into a position by a separate naive rule, not optimized for PnL).
 
-Ключевое отличие N-HiTS от N-BEATS - multi-rate sampling: разные блоки стека
-смотрят на вход с разным разрешением (пулингом). Ранние блоки видят сильно
-усреднённый (низкочастотный) вход и ловят долгосрочный тренд, поздние блоки -
-почти полное разрешение и ловят мелкие детали. Это, в отличие от N-BEATS
-(где все блоки видят один и тот же вход), и даёт N-HiTS большую вычислительную
-эффективность и устойчивость на длинных горизонтах.
+The key difference between N-HiTS and N-BEATS is multi-rate sampling: different
+blocks of the stack look at the input at different resolutions (via pooling).
+Early blocks see a heavily averaged (low-frequency) input and catch the
+long-term trend, later blocks see near-full resolution and catch fine
+details. This, unlike N-BEATS (where all blocks see the same input), gives
+N-HiTS greater computational efficiency and stability over long horizons.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from core.features import chronological_split
 
 
 class _NHiTSBlock(nn.Module):
-    """Блок со своим коэффициентом пулинга (multi-rate sampling)."""
+    """A block with its own pooling factor (multi-rate sampling)."""
 
     def __init__(self, lookback: int, pool_kernel: int, hidden: int = 32):
         super().__init__()
@@ -45,9 +45,9 @@ class _NHiTSBlock(nn.Module):
         self.forecast_head = nn.Linear(hidden, 1)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        pooled = self.pool(x.unsqueeze(1)).squeeze(1)  # низкочастотное представление входа
+        pooled = self.pool(x.unsqueeze(1)).squeeze(1)  # low-frequency representation of the input
         h = self.mlp(pooled)
-        backcast = self.backcast_head(h)  # реконструкция на полном разрешении
+        backcast = self.backcast_head(h)  # reconstruction at full resolution
         forecast = self.forecast_head(h)
         return backcast, forecast
 
@@ -71,8 +71,8 @@ class NHiTSForecaster(SingleAssetAlgorithm):
     name = "N-HiTS Forecaster"
     category = AlgorithmCategory.TIME_SERIES_FORECAST
     description = (
-        "Прогноз следующей доходности иерархической многочастотной сетью (N-HiTS): "
-        "блоки от низкого к высокому разрешению разделяют долгосрочный тренд и мелкие детали."
+        "Forecast of the next return by a hierarchical multi-rate network (N-HiTS): "
+        "blocks from low to high resolution separate the long-term trend from fine details."
     )
 
     def __init__(

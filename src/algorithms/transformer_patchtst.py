@@ -1,16 +1,16 @@
 """
-Transformer (упрощённый PatchTST) - патчинг + self-attention по временному ряду.
+Transformer (simplified PatchTST) - patching + self-attention over the time series.
 
-вместо подачи в attention каждого дня по отдельности, окно из `seq_len` дней признаков режется на непересекающиеся
-патчи длиной `patch_len` (идея PatchTST - attention работает быстрее и лучше
-обобщается на патчах, а не на отдельных точках). Каждый патч линейно
-проецируется в d_model, к эмбеддингам добавляются обучаемые позиционные
-эмбеддинги, дальше - стандартный nn.TransformerEncoder и усреднение по патчам.
+instead of feeding each day into attention separately, a window of `seq_len` days of features is cut into non-overlapping
+patches of length `patch_len` (the PatchTST idea - attention works faster and generalizes
+better on patches than on individual points). Each patch is linearly
+projected into d_model, learnable positional embeddings are added to the
+embeddings, and then a standard nn.TransformerEncoder is applied followed by averaging over the patches.
 
-Реалистичный уровень: хорош на дневных данных с длинной историей, слаб на
-тиках; для устойчивого обучения нужно заметно больше данных, чем деревьям
-или линейным моделям - здесь обучающая выборка (одна акция за несколько лет)
-на грани минимально достаточной.
+Realistic level: good on daily data with a long history, weak on
+tick data; stable training needs noticeably more data than trees
+or linear models require - here the training sample (one stock over several years)
+is on the edge of being minimally sufficient.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class _PatchTSTNet(nn.Module):
     def __init__(self, n_features: int, seq_len: int, patch_len: int = 5, d_model: int = 32, nhead: int = 4, num_layers: int = 1):
         super().__init__()
         self.patch_len = patch_len
-        self.n_patches = seq_len // patch_len  # обрезаем хвост окна, если seq_len не делится нацело
+        self.n_patches = seq_len // patch_len  # trim the tail of the window if seq_len doesn't divide evenly
         self.used_len = self.n_patches * patch_len
 
         self.patch_proj = nn.Linear(patch_len * n_features, d_model)
@@ -42,13 +42,13 @@ class _PatchTSTNet(nn.Module):
         self.head = nn.Linear(d_model, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (batch, seq_len, n_features) -> берём последние used_len шагов, режем на патчи
+        # x: (batch, seq_len, n_features) -> take the last used_len steps, cut into patches
         x = x[:, -self.used_len :, :]
         batch = x.shape[0]
         patches = x.reshape(batch, self.n_patches, self.patch_len * x.shape[2])
         tokens = self.patch_proj(patches) + self.pos_embedding  # (batch, n_patches, d_model)
         encoded = self.encoder(tokens)
-        pooled = encoded.mean(dim=1)  # mean pooling по токенам-патчам
+        pooled = encoded.mean(dim=1)  # mean pooling over patch tokens
         return self.head(pooled).squeeze(-1)
 
 
@@ -56,8 +56,8 @@ class PatchTSTPredictor(SingleAssetAlgorithm):
     name = "PatchTST Transformer Predictor"
     category = AlgorithmCategory.SEQUENCE_MODEL
     description = (
-        "Упрощённый PatchTST: временной ряд признаков режется на патчи, кодируется "
-        "self-attention трансформером и предсказывает вероятность роста цены на горизонте."
+        "Simplified PatchTST: the time series of features is cut into patches, encoded by a "
+        "self-attention transformer, and predicts the probability of the price rising over the horizon."
     )
 
     def __init__(
@@ -92,7 +92,7 @@ class PatchTSTPredictor(SingleAssetAlgorithm):
         self.model: _PatchTSTNet | None = None
 
     def _make_sequences(self, X: np.ndarray, y: np.ndarray | None, seq_len: int):
-        """Скользящее окно длиной seq_len; таргет - значение y в последней точке окна."""
+        """Sliding window of length seq_len; the target is the value of y at the last point of the window."""
         n = len(X)
         if n <= seq_len:
             empty_x = np.empty((0, seq_len, X.shape[1]), dtype=np.float32)

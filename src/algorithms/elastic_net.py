@@ -1,14 +1,14 @@
 """
-Elastic Net — факторная модель, отбор признаков из множества альф.
+Elastic Net - factor model, feature selection from a set of alphas.
 
-Табличная строка #3 (Elastic Net / Lasso): линейная регрессия с комбинацией
-L1/L2-регуляризации предсказывает будущую доходность (fwd_return, регрессия,
-а не классификация направления) как линейную комбинацию инженерных признаков.
-L1-часть регуляризации обнуляет веса нерелевантных признаков (отбор факторов),
-L2-часть стабилизирует решение при коррелированных признаках.
+Table row #3 (Elastic Net / Lasso): linear regression with a combination
+of L1/L2 regularization predicts future return (fwd_return, regression,
+not direction classification) as a linear combination of engineered features.
+The L1 part of the regularization zeroes out weights of irrelevant features (factor selection),
+the L2 part stabilizes the solution under correlated features.
 
-Реалистичный уровень (см. docs/Алгоритмы.md): низкая точность, но высокая
-стабильность коэффициентов. Улавливает только линейные зависимости.
+Realistic level (see docs/Алгоритмы.md): low accuracy but high
+coefficient stability. Captures only linear dependencies.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ class ElasticNetFactorModel(SingleAssetAlgorithm):
     name = "Elastic Net Factor Model"
     category = AlgorithmCategory.LINEAR_FACTOR
     description = (
-        "Линейная факторная модель (Elastic Net) прогнозирует будущую доходность как комбинацию "
-        "технических признаков, с L1-отбором значимых факторов и L2-стабилизацией коэффициентов."
+        "Linear factor model (Elastic Net) predicts future return as a combination of "
+        "technical features, with L1 selection of significant factors and L2 stabilization of coefficients."
     )
 
     def __init__(
@@ -79,7 +79,7 @@ class ElasticNetFactorModel(SingleAssetAlgorithm):
 
 
 if __name__ == "__main__":
-    # Быстрая самопроверка на синтетических данных (без сети).
+    # Quick self-check on synthetic data (no network).
     rng = np.random.default_rng(0)
     n = 400
     price = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))

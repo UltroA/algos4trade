@@ -1,4 +1,4 @@
-"""Метрики качества торговой стратегии, вычисляемые по ряду доходностей."""
+"""Trading strategy quality metrics computed from a returns series."""
 
 from __future__ import annotations
 
@@ -42,14 +42,15 @@ def max_drawdown(equity_curve: pd.Series) -> float:
 
 def compute_hit_rate(position_lagged: pd.Series, asset_returns: pd.Series) -> float:
     """
-    HR = доля шагов, на которых знак вчерашней позиции совпал со знаком
-    сегодняшней доходности актива: sign(p_{t-1}) == sign(r_t^asset).
+    HR = fraction of steps where the sign of yesterday's position matched
+    the sign of today's asset return: sign(p_{t-1}) == sign(r_t^asset).
 
-    Шаги с p_{t-1} == 0 (позиция не открыта) исключены из знаменателя -
-    иначе при полностью плоской стратегии (0 сделок) sign(0) == sign(0)
-    формально даёт HR = 100%, что не отражает никакого предсказания.
-    Если таких шагов вообще нет (стратегия ни разу не открыла позицию),
-    HR не определён -> NaN.
+    Steps with p_{t-1} == 0 (no open position) are excluded from the
+    denominator - otherwise, for a fully flat strategy (0 trades),
+    sign(0) == sign(0) would formally give HR = 100%, which reflects no
+    prediction at all.
+    If there are no such steps at all (the strategy never opened a position),
+    HR is undefined -> NaN.
     """
     position_lagged = position_lagged.reindex(asset_returns.index).fillna(0.0)
     mask = position_lagged != 0
@@ -65,11 +66,13 @@ def compute_metrics(
     periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> BacktestMetrics:
     """
-    strategy_returns - доходность стратегии за период (уже с учётом позиции и издержек).
-    signals          - позиция [-1, 1] в каждый момент (для подсчёта числа сделок и win-rate).
-    hit_rate         - посчитан вызывающей стороной через compute_hit_rate (формула
-                        завязана на лаг позиции и сырую доходность актива, которых
-                        внутри этой функции нет).
+    strategy_returns - strategy return per period (already accounting for
+                        position and costs).
+    signals          - position [-1, 1] at each point in time (used to count
+                        trades and win rate).
+    hit_rate         - computed by the caller via compute_hit_rate (the formula
+                        depends on the lagged position and raw asset return,
+                        neither of which is available inside this function).
     """
     strategy_returns = strategy_returns.fillna(0.0)
     equity_curve = (1.0 + strategy_returns).cumprod()

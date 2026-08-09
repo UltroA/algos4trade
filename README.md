@@ -227,3 +227,14 @@ This project is part of my work on researching various algorithms for trading on
 After fully implementing the methods, tests and core components, I thought my implementation might be useful to someone.
 
 There may be errors in the code; please report them in `pull requests`.
+
+## 9.  AI Usage
+
+AI is used in this project to verify the correctness of certain algorithm implementations and to produce initial translations of in-code comments into English. The model used is Claude Sonnet 5.
+#### Requirements for AI-Assisted Code
+If you intend to contribute code written with the help of AI, the following rules are strongly recommended:
+- cover such code with tests;
+- verify that it contains no critical defects or model hallucinations;
+- explicitly mark generated fragments in the source code;
+- indicate the use of AI in the commit and specify in its description exactly which changes were AI-generated;
+- Add information about AI model you used;

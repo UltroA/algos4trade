@@ -1,17 +1,17 @@
 """
-CNN по "картинкам" графиков - распознавание паттернов на изображениях свечей.
+CNN over chart "images" - pattern recognition on candlestick images.
 
-вместо табличных признаков модель получает на вход
-растеризованное изображение окна свечей (OHLC) и учится классифицировать
-направление следующей свечи по визуальному паттерну. Реалистичный уровень -
-52-54% direction accuracy; главная слабость - "чёрный ящик, тяжело
-отлаживать" (в отличие от признаков LightGBM/RandomForest здесь нет прямой
-интерпретации важности входа).
+Instead of tabular features, the model receives as input
+a rasterized image of a window of candles (OHLC) and learns to classify
+the direction of the next candle from the visual pattern. Realistic level is
+52-54% direction accuracy; the main weakness is a "black box, hard to
+debug" (unlike LightGBM/RandomForest features, there is no direct
+interpretation of input importance here).
 
-Рендеринг через matplotlib был бы на порядки медленнее и не нужен - окно
-свечей растеризуется вручную в маленький numpy-массив (1, H, W): для каждой
-свечи один "столбец тени" (от low до high) и один "столбец тела" (от open
-до close), высота нормализована min-max по high/low всего окна.
+Rendering via matplotlib would be orders of magnitude slower and is not needed -
+the candle window is rasterized manually into a small numpy array (1, H, W): for each
+candle one "shadow column" (from low to high) and one "body column" (from open
+to close), height normalized min-max by the high/low of the whole window.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ _IMG_HEIGHT = 32
 
 
 def _rasterize_window(window: pd.DataFrame, height: int = _IMG_HEIGHT) -> np.ndarray:
-    """Превращает окно OHLC-свечей в изображение (1, height, width), width = 2 * n_candles."""
+    """Turns a window of OHLC candles into an image (1, height, width), width = 2 * n_candles."""
     n = len(window)
     width = 2 * n
     img = np.zeros((height, width), dtype=np.float32)
@@ -79,8 +79,8 @@ class CandlestickCNN(SingleAssetAlgorithm):
     name = "Candlestick Pattern CNN"
     category = AlgorithmCategory.PATTERN_RECOGNITION
     description = (
-        "Сверточная сеть распознаёт визуальные паттерны в растеризованном окне свечей "
-        "и классифицирует направление следующей свечи."
+        "Convolutional network recognizes visual patterns in a rasterized window of candles "
+        "and classifies the direction of the next candle."
     )
 
     def __init__(

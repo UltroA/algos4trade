@@ -1,14 +1,14 @@
 """
-Autoencoder — сжатие технических признаков в латентные факторы.
+Autoencoder - compresses technical features into latent factors.
 
-Autoencoder(VAE): сжимает набор технических признаков
-(из core.features) в низкоразмерное латентное представление и деноизит их.
-Сам по себе autoencoder не предсказывает направление цены — по таблице,
-"улучшает вход другим моделям". Здесь это показано напрямую: поверх
-обученного (unsupervised, без таргета) энкодера обучается простой downstream-
-классификатор (LogisticRegression) на латентных факторах. Главная слабость —
-латентные факторы неинтерпретируемы (в отличие от, например, RSI/MACD в
-LightGBM-модели, где важность признака можно посмотреть напрямую).
+Autoencoder(VAE): compresses a set of technical features
+(from core.features) into a low-dimensional latent representation and denoises them.
+On its own, the autoencoder does not predict price direction; per the table,
+it "improves the input for other models." Here that is shown directly: on top of
+the trained (unsupervised, no target) encoder, a simple downstream
+classifier (LogisticRegression) is trained on the latent factors. The main weakness
+is that the latent factors are not interpretable (unlike, for example, RSI/MACD in
+the LightGBM model, where feature importance can be inspected directly).
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ class AutoencoderFactorModel(SingleAssetAlgorithm):
     name = "Autoencoder Factor Model"
     category = AlgorithmCategory.REPRESENTATION_LEARNING
     description = (
-        "Сжимает технические признаки в латентные факторы автоэнкодером (unsupervised) "
-        "и обучает поверх них простой линейный классификатор направления цены."
+        "Compresses technical features into latent factors with an autoencoder (unsupervised) "
+        "and trains a simple linear classifier of price direction on top of them."
     )
 
     def __init__(

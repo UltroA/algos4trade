@@ -1,11 +1,11 @@
 """
-Buy-and-Hold - справочная базовая линия: постоянная максимальная длинная
-позиция на всём тестовом периоде, без какого-либо сигнала.
+Buy-and-Hold - reference baseline: a constant maximum long
+position over the entire test period, without any signal.
 
-`AlgorithmCategory.BASELINE`, не входит в число основных алгоритмов.
-Нужна как нижняя планка сравнения: любой активно торгующий алгоритм должен
-как минимум объяснить, почему он лучше простого владения активом (с учётом
-единственной сделки на вход и издержек на неё).
+`AlgorithmCategory.BASELINE`, not one of the core algorithms.
+Needed as the lower bound of comparison: any actively trading algorithm should
+at minimum explain why it is better than simply holding the asset (accounting for
+the single entry trade and its costs).
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ class BuyAndHoldBaseline(SingleAssetAlgorithm):
     name = "Buy and Hold Baseline"
     category = AlgorithmCategory.BASELINE
     description = (
-        "Справочная базовая линия: позиция +1 на всём тестовом периоде "
-        "(одна сделка на вход). Не использует обучающие данные."
+        "Reference baseline: position +1 over the entire test period "
+        "(one entry trade). Does not use training data."
     )
 
     def fit(self, train_data: pd.DataFrame) -> "BuyAndHoldBaseline":

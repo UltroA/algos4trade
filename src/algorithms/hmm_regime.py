@@ -1,14 +1,15 @@
 """
-HMM (скрытая марковская модель) - определение режима рынка.
+HMM (hidden Markov model) - market regime detection.
 
-гауссова HMM с 3 скрытыми состояниями пытается разделить
-рынок на устойчивые режимы (тренд-вверх / флэт / стресс) по доходности и
-волатильности. Реалистичный уровень - 2-4 устойчивых режима удаётся выделить
-в среднем; главная слабость (см. таблицу) - режимы переопределяются задним
-числом: Viterbi-декодирование, применённое к уже свершившемуся отрезку, не
-эквивалентно онлайн-детекции в реальном времени. Здесь для простоты бэктеста
-`model.predict()` вызывается сразу на всём test-окне (см. generate_signals) -
-это оптимистичное допущение, в проде уместнее скользящее online-декодирование.
+a Gaussian HMM with 3 hidden states tries to split the market
+into stable regimes (uptrend / flat / stress) based on returns and
+volatility. Realistic level - on average 2-4 stable regimes can be
+distinguished; main weakness (see table) - regimes are redefined
+retroactively: Viterbi decoding applied to an already-completed segment is
+not equivalent to real-time online detection. Here, for backtest simplicity,
+`model.predict()` is called on the entire test window at once (see
+generate_signals) - this is an optimistic assumption; in production a
+rolling online decoding would be more appropriate.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ class HMMRegimeDetector(SingleAssetAlgorithm):
     name = "HMM Regime Detector"
     category = AlgorithmCategory.REGIME_DETECTION
     description = (
-        "Гауссова скрытая марковская модель с 3 состояниями классифицирует рыночный режим "
-        "(бычий тренд / флэт / стрессовая просадка) по доходности и волатильности и торгует по нему."
+        "A Gaussian hidden Markov model with 3 states classifies the market regime "
+        "(bull trend / flat / stress drawdown) from returns and volatility, and trades on it."
     )
 
     def __init__(self, n_states: int = 3, n_iter: int = 100, vol_window: int = 10, seed: int = 0, **kwargs):
@@ -54,8 +55,8 @@ class HMMRegimeDetector(SingleAssetAlgorithm):
         X = feat.to_numpy()
         self.model.fit(X)
 
-        # Определяем "бычий" (наибольшая средняя доходность) и "медвежий/стрессовый"
-        # (наименьшая средняя доходность) режимы по means_ обученной модели.
+        # Determine the "bull" (highest mean return) and "bear/stress"
+        # (lowest mean return) regimes from the fitted model's means_.
         mean_returns = self.model.means_[:, 0]
         self._bull_state = int(np.argmax(mean_returns))
         self._bear_state = int(np.argmin(mean_returns))
@@ -81,7 +82,7 @@ class HMMRegimeDetector(SingleAssetAlgorithm):
 if __name__ == "__main__":
     rng = np.random.default_rng(0)
     n = 500
-    # Синтетика с переключением режимов: тренд-вверх, флэт, стрессовая просадка.
+    # Synthetic data with regime switching: uptrend, flat, stress drawdown.
     regimes = np.random.default_rng(1).choice([0, 1, 2], size=n, p=[0.4, 0.4, 0.2])
     drift_by_regime = {0: 0.002, 1: 0.0, 2: -0.004}
     vol_by_regime = {0: 0.008, 1: 0.006, 2: 0.02}

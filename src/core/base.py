@@ -1,13 +1,13 @@
 """
-Единый ООП-контракт для всех торговых алгоритмов проекта.
+Unified OOP contract for all trading algorithms in the project.
 
-Каждый алгоритм в ``src/algorithms/`` наследует :class:`BaseTradingAlgorithm`
-(напрямую или через :class:`SingleAssetAlgorithm` / :class:`MultiAssetAlgorithm`)
-и реализует ``fit`` и ``generate_signals``. Единый интерфейс позволяет
-:class:`~core.backtester.Backtester` и :class:`~core.benchmark_runner.BenchmarkRunner`
-одинаково прогонять бэктест и замерять производительность для любого алгоритма
-из таблицы docs/Алгоритмы.md, независимо от того, что у него внутри -
-градиентный бустинг, нейросеть, RL-агент или генетическое программирование.
+Each algorithm in ``src/algorithms/`` inherits from :class:`BaseTradingAlgorithm`
+(directly or via :class:`SingleAssetAlgorithm` / :class:`MultiAssetAlgorithm`)
+and implements ``fit`` and ``generate_signals``. This unified interface lets
+:class:`~core.backtester.Backtester` and :class:`~core.benchmark_runner.BenchmarkRunner`
+run the backtest and measure performance the same way for any algorithm
+from the docs/Алгоритмы.md table, regardless of what's inside it -
+gradient boosting, a neural network, an RL agent, or genetic programming.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import pandas as pd
 
 
 class AlgorithmCategory(str, Enum):
-    """Категория алгоритма - как из таблицы docs/Алгоритмы.md."""
+    """Algorithm category - as in the docs/Алгоритмы.md table."""
 
     SUPERVISED_RANKING = "supervised_ranking"
     LINEAR_FACTOR = "linear_factor"
@@ -42,28 +42,28 @@ class AlgorithmCategory(str, Enum):
 
 
 class InputMode(str, Enum):
-    """Определяет форму данных, которые алгоритм принимает в fit/generate_signals."""
+    """Defines the shape of the data the algorithm accepts in fit/generate_signals."""
 
-    SINGLE_ASSET = "single_asset"   # pd.DataFrame с колонками open/high/low/close/volume
+    SINGLE_ASSET = "single_asset"   # pd.DataFrame with open/high/low/close/volume columns
     MULTI_ASSET = "multi_asset"     # dict[ticker -> pd.DataFrame]
 
 
 class BaseTradingAlgorithm(ABC):
     """
-    Базовый класс торгового алгоритма.
+    Base class for a trading algorithm.
 
-    Атрибуты класса (переопределяются в наследниках):
-        name        - короткое человекочитаемое имя.
+    Class attributes (overridden in subclasses):
+        name        - short human-readable name.
         category    - :class:`AlgorithmCategory`.
         input_mode  - :class:`InputMode`.
-        description - 1-2 предложения о роли алгоритма в трейдинге.
+        description - 1-2 sentences on the algorithm's role in trading.
 
-    Контракт:
-        * ``fit`` обучается только на данных, переданных ему (train-часть),
-          и не должен видеть тестовую часть - иначе бэктест некорректен.
-        * ``generate_signals`` для каждой строки ``data`` возвращает позицию
-          в диапазоне [-1, 1] (лонг/шорт/флэт), используя только информацию,
-          доступную НА МОМЕНТ этой строки (без заглядывания вперёд).
+    Contract:
+        * ``fit`` trains only on the data it's given (the train split),
+          and must not see the test split - otherwise the backtest is invalid.
+        * ``generate_signals`` returns, for each row of ``data``, a position
+          in the range [-1, 1] (long/short/flat), using only information
+          available AT THE TIME of that row (no look-ahead).
     """
 
     name: str = "BaseTradingAlgorithm"
@@ -77,7 +77,7 @@ class BaseTradingAlgorithm(ABC):
 
     @abstractmethod
     def fit(self, train_data: pd.DataFrame | dict[str, pd.DataFrame]) -> "BaseTradingAlgorithm":
-        """Обучает модель. Должен вернуть self и выставить is_fitted=True."""
+        """Trains the model. Must return self and set is_fitted=True."""
         raise NotImplementedError
 
     @abstractmethod
@@ -85,10 +85,10 @@ class BaseTradingAlgorithm(ABC):
         self, data: pd.DataFrame | dict[str, pd.DataFrame]
     ) -> pd.Series | dict[str, pd.Series]:
         """
-        Возвращает целевую позицию по времени.
+        Returns the target position over time.
 
-        Для SINGLE_ASSET: pd.Series той же длины/индекса, что и data, значения в [-1, 1].
-        Для MULTI_ASSET: dict[ticker -> pd.Series] в том же формате.
+        For SINGLE_ASSET: pd.Series of the same length/index as data, values in [-1, 1].
+        For MULTI_ASSET: dict[ticker -> pd.Series] in the same format.
         """
         raise NotImplementedError
 
@@ -97,16 +97,16 @@ class BaseTradingAlgorithm(ABC):
         train_data: pd.DataFrame | dict[str, pd.DataFrame],
         eval_data: pd.DataFrame | dict[str, pd.DataFrame],
     ) -> pd.Series | dict[str, pd.Series]:
-        """Удобный шорткат: fit на train, затем сигналы на eval."""
+        """Convenience shortcut: fit on train, then generate signals on eval."""
         self.fit(train_data)
         return self.generate_signals(eval_data)
 
-    def __repr__(self) -> str:  # pragma: no cover - удобство отладки
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
         return f"<{self.__class__.__name__} name={self.name!r} fitted={self.is_fitted}>"
 
 
 class SingleAssetAlgorithm(BaseTradingAlgorithm):
-    """Удобный базовый класс для алгоритмов с input_mode=SINGLE_ASSET."""
+    """Convenience base class for algorithms with input_mode=SINGLE_ASSET."""
 
     input_mode = InputMode.SINGLE_ASSET
 
@@ -120,7 +120,7 @@ class SingleAssetAlgorithm(BaseTradingAlgorithm):
 
 
 class MultiAssetAlgorithm(BaseTradingAlgorithm):
-    """Удобный базовый класс для алгоритмов с input_mode=MULTI_ASSET (пары, кластеризация, аллокация)."""
+    """Convenience base class for algorithms with input_mode=MULTI_ASSET (pairs, clustering, allocation)."""
 
     input_mode = InputMode.MULTI_ASSET
 

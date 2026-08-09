@@ -1,12 +1,12 @@
 """
-SMA Crossover - голый трендовый сигнал без риск-оверлея.
+SMA Crossover - a bare trend signal without a risk overlay.
 
-Справочная базовая линия (`AlgorithmCategory.BASELINE`), а не полноценный
-алгоритм из docs/Алгоритмы.md. Воспроизводит ровно тот же SMA(10 vs 50)
-кроссовер, что зашит внутри `IsolationForestRiskSwitch`/`OneClassSVMRiskSwitch`
-как "сигнал до оверлея" - нужен, чтобы в сводных таблицах можно было
-напрямую проверить, действительно ли риск-оверлей поверх этого сигнала
-лучше самого сигнала, а не просто предполагать это без сравнения.
+A reference baseline (`AlgorithmCategory.BASELINE`), not a full-fledged
+algorithm from docs/Алгоритмы.md. Reproduces exactly the same SMA(10 vs 50)
+crossover that is baked into `IsolationForestRiskSwitch`/`OneClassSVMRiskSwitch`
+as the "signal before the overlay" - needed so the summary tables can
+directly verify whether a risk overlay on top of this signal is actually
+better than the signal alone, rather than just assuming it without comparison.
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ class SMACrossoverBaseline(SingleAssetAlgorithm):
     name = "SMA Crossover Baseline"
     category = AlgorithmCategory.BASELINE
     description = (
-        "Справочная базовая линия: SMA(10) выше SMA(50) -> лонг, иначе шорт. "
-        "Без риск-оверлея и без обучения на данных - прямое сравнение для "
-        "проверки, что даёт оверлей поверх этого же сигнала."
+        "Reference baseline: SMA(10) above SMA(50) -> long, otherwise short. "
+        "No risk overlay and no training on data - a direct comparison to "
+        "check what an overlay on top of this same signal actually gives."
     )
 
     def __init__(self, fast_window: int = 10, slow_window: int = 50, **kwargs):

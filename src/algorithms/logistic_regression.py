@@ -1,15 +1,15 @@
 """
-Логистическая регрессия - прогноз вероятности пробоя/отката, калибровка.
+Logistic regression - breakout/pullback probability forecast, calibration.
 
-линейный классификатор направления цены (fwd_direction)
-поверх тех же инженерных признаков, что и остальные supervised-модели проекта.
-В отличие от деревьев/бустинга даёт хорошо калиброванную вероятность класса
-(predict_proba ближе к истинной частоте события), что удобно для порогового
-решения "торговать только при высокой уверенности".
+A linear classifier of price direction (fwd_direction)
+on top of the same engineered features as the project's other supervised
+models. Unlike trees/boosting, it gives a well-calibrated class probability
+(predict_proba closer to the true event frequency), which is convenient for
+a threshold decision like "only trade when confidence is high".
 
-Реалистичный уровень (см. docs/Алгоритмы.md): direction accuracy ~51-53%.
-Требует ручного feature engineering - модель сама не строит нелинейные
-взаимодействия признаков.
+Realistic level (see docs/Алгоритмы.md): direction accuracy ~51-53%.
+Requires manual feature engineering - the model does not build nonlinear
+feature interactions on its own.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ class LogisticRegressionDirection(SingleAssetAlgorithm):
     name = "Logistic Regression Direction"
     category = AlgorithmCategory.SUPERVISED_RANKING
     description = (
-        "Логистическая регрессия прогнозирует калиброванную вероятность роста цены на техническими "
-        "признаками - простой линейный бейзлайн для сигналов пробоя/отката."
+        "Logistic regression predicts a calibrated probability of price increase from technical "
+        "features - a simple linear baseline for breakout/pullback signals."
     )
 
     def __init__(
@@ -75,7 +75,7 @@ class LogisticRegressionDirection(SingleAssetAlgorithm):
 
 
 if __name__ == "__main__":
-    # Быстрая самопроверка на синтетических данных (без сети).
+    # Quick self-check on synthetic data (no network).
     import numpy as np
 
     rng = np.random.default_rng(0)
