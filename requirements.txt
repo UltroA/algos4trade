@@ -1,19 +1,25 @@
-numpy
-pandas
-scipy
-scikit-learn
-lightgbm
-xgboost
-catboost
-hmmlearn
-hdbscan
-torch
-gplearn
-python-dotenv
-pyarrow
-requests
-tabulate
-feedparser
-openai
-pydantic
-psutil
+# Pinned to the exact versions this repo's results/*.md were generated with
+# (Python 3.12.7) - see "Installation and setup" in README.md for why. This
+# is the full install, including the news-sentiment pipeline's dependencies
+# (feedparser/openai/pydantic). Prefer `pip install -e .` (base only) or
+# `pip install -e ".[news]"` (with it) via pyproject.toml if you want the
+# split; this file is kept as the single-command equivalent of the latter.
+numpy==2.5.1
+pandas==3.0.5
+scipy==1.18.0
+scikit-learn==1.9.0
+lightgbm==4.7.0
+xgboost==3.4.0
+catboost==1.2.10
+hmmlearn==0.3.3
+hdbscan==0.8.44
+torch==2.13.0
+gplearn==0.4.3
+python-dotenv==1.2.2
+pyarrow==25.0.0
+requests==2.34.2
+tabulate==0.10.0
+psutil==7.2.2
+feedparser==6.0.14
+openai==2.53.0
+pydantic==2.13.4

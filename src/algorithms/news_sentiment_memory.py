@@ -33,14 +33,22 @@ import logging
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 from core.base import AlgorithmCategory
-from core.llm_sentiment import LMStudioSentimentClient
 from core.news_feed import NewsItem
 
 from algorithms.news_sentiment import NewsSentimentSignal
+
+if TYPE_CHECKING:
+    # core.llm_sentiment pulls in openai/pydantic (the "news" extra) - importing it
+    # only for type checking keeps this module (and algorithm_discovery.py's blanket
+    # `import algorithms.<every file>`) working on a base install that skips that extra.
+    # The real import is deferred to _get_llm() below, matching its existing lazy-
+    # construction design ("llm=None means construct lazily on first use").
+    from core.llm_sentiment import LMStudioSentimentClient
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +92,8 @@ class NewsSentimentMemorySignal(NewsSentimentSignal):
 
     def _get_llm(self) -> LMStudioSentimentClient:
         if self._llm is None:
+            from core.llm_sentiment import LMStudioSentimentClient
+
             self._llm = LMStudioSentimentClient()
         return self._llm
 

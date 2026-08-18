@@ -95,11 +95,15 @@ def _load_config(args: argparse.Namespace) -> SessionConfig:
 
 
 def _select_algorithms(names_filter: str | None) -> list[tuple[str, str]]:
-    found, skipped = discover_algorithms()
+    found, skipped, failed = discover_algorithms()
     if skipped:
         print(f"Skipped (need another algorithm to construct, see run_composite_benchmarks.py): {len(skipped)}")
         for modname, clsname in skipped:
             print(f"  - {modname}.{clsname}")
+    if failed:
+        print(f"Failed to import (likely a missing optional dependency, e.g. the \"news\" extra): {len(failed)}")
+        for modname, error in failed:
+            print(f"  - {modname}: {error}")
     if names_filter:
         wanted = {n.strip() for n in names_filter.split(",") if n.strip()}
         found = [(m, c) for m, c in found if m in wanted]

@@ -1,8 +1,14 @@
 **English** | [Русский](./README_RU.md)
 
+[![CI](https://github.com/UltroA/alogs4trade/actions/workflows/ci.yml/badge.svg)](https://github.com/UltroA/alogs4trade/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
+
 The project implements trading algorithms as OOP classes with a unified interface, on top of real historical MOEX data from the T-Invest API.
 
 ## 1. Installation and setup
+
+Requires **Python 3.12** (developed and pinned against 3.12.7 - `requirements.txt`/`pyproject.toml` are version-pinned to what `results/*.md` were actually generated with, see "Why pinned" below).
 
 ```bash
 cd alogs4trade
@@ -11,17 +17,29 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The `.env` file (in the root of `alogs4trade/`) must contain a token:
+Or, via `pyproject.toml` (equivalent, but lets you skip the news-sentiment pipeline's dependencies if you don't need it - see section 4):
+
+```bash
+pip install -e .              # base: everything except the news-sentiment pipeline
+pip install -e ".[news]"      # base + feedparser/openai/pydantic, for scripts/run_news_monitor.py
+pip install -e ".[dev]"       # + pytest, to run tests/ (see "Tests and CI" below)
+```
+
+> **Linux + torch note:** on Linux specifically, a plain `pip install` can resolve torch's default CUDA build (~2.5 GB of extra wheels) even on a machine with no GPU - this project only ever runs torch on CPU. To avoid that, install the pinned CPU wheel first from PyTorch's own CPU index (pip then sees the pin is already satisfied and won't re-resolve it): `pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu`, then run the install command above.
+
+**Why pinned:** an unpinned `requirements.txt` looks harmless until someone reruns this a year later - `pip install -r requirements.txt` then resolves whatever `numpy`/`torch`/`scikit-learn` are current at that point, not what produced the numbers in `results/*.md`, and there is no guarantee those numbers reproduce under a different library version. Pin first, then benchmark.
+
+Copy `.env.example` to `.env` and fill in your token:
 
 ```
 T_INVEST_TOKEN=t.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-A **read-only** token is enough - trading permissions are not required for downloading historical candles.
+A **read-only** token is enough - trading permissions are not required for downloading historical candles. See `SECURITY.md` for token-handling guidance (never commit `.env`, never paste a token into an issue/log).
 
-> **SSL note:** the `*.tinkoff.ru` domain currently serves a certificate issued by the root CA of the Russian Ministry of Digital Development ("Russian Trusted Root CA"), which is absent by default from trusted certificate stores outside Russia. `core/tinvest_client.py` already handles this on its own - it assembles a CA bundle from `certifi` + `core/certs/russian_trusted_ca.pem`. No additional steps are required.
+> **SSL note:** the `*.tinkoff.ru` domain currently serves a certificate issued by the root CA of the Russian Ministry of Digital Development ("Russian Trusted Root CA"), which is absent by default from trusted certificate stores outside Russia. `core/providers/tinvest.py` already handles this on its own - it assembles a CA bundle from `certifi` + `core/certs/russian_trusted_ca.pem`. No additional steps are required.
 
-Any script that uses the algorithms must add `src/` to `sys.path` (or be run with `PYTHONPATH=src`) and call `load_dotenv()` before creating a `TInvestDataLoader`:
+If you used `pip install -e .` above, `core`/`algorithms` are already importable anywhere - skip straight to `load_dotenv()`. Otherwise, any script that uses the algorithms must add `src/` to `sys.path` (or be run with `PYTHONPATH=src`) and call `load_dotenv()` before creating a `TInvestDataLoader`:
 
 ```python
 import sys
@@ -194,7 +212,7 @@ This is a recommendation/signal tool, not automated execution: `T_INVEST_TOKEN` 
 - **A real broker ledger, not a returns formula.** Each algorithm gets its own `SimulatedBroker`: an actual cash + shares-per-ticker account that gets rebalanced tick by tick and pays `transaction_cost_bps` on every trade, the way a real broker statement would. That ledger is what "money won/lost" (`pnl_rub`, `final_capital`) is computed from - not `total_return * starting_capital`.
 - **Real timing, real delay.** In the default (live) mode, every "new candle" is fetched from T-Invest at the moment it actually happens (`TInvestDataLoader.load_recent(use_cache=False)`) - there is no injected/fake latency, the session's wall-clock pacing *is* the real network round trip. `TInvestClient` now records the round-trip time of every call it makes; the final report includes those latency stats (mean/p50/p95/max). A `--demo` mode also exists purely so the whole pipeline can be exercised in minutes without waiting for real market hours: it replays already-fetched recent bars and sleeps a synthetic per-tick delay *sampled from that same real measured latency* instead of a guessed constant.
 
-**The configurator** - `configs/market_simulator.json` - is what decides when the simulator is actually working (`session_start`/`session_end` in MSK, `trading_days`, matching the MOEX main session) and how long a run is allowed to go (`max_duration_seconds`, `poll_interval_seconds`), alongside `tickers`, `interval`, `starting_capital_rub`, `transaction_cost_bps`, `warmup_days` (history pulled to `fit()` each algorithm before going live), `autosave_every_ticks`, and `run_news_monitor`.
+**The configurator** - `configs/market_simulator.json` - is what decides when the simulator is actually working (`session_start`/`session_end` in MSK, `trading_days`, matching the MOEX main session) and how long a run is allowed to go (`max_duration_seconds`, `poll_interval_seconds`), alongside `tickers`, `interval`, `starting_capital_rub`, `transaction_cost_bps`, `warmup_days` (history pulled to `fit()` each algorithm before going live), `autosave_every_ticks`, and `run_news_monitor`. Those three session fields feed a `core.exchanges.base.Exchange` (`MOEXExchange` by default) that answers "is the market open right now" - pass `MarketSimulator(config, exchange=...)` with your own `Exchange` implementation to trade a different venue's calendar instead of MOEX's (see section 9).
 
 **Autosave**: `results/<basename>_progress.json` is rewritten every `autosave_every_ticks` ticks for as long as the session runs, so a multi-hour live session can be interrupted (Ctrl-C is caught and finalizes cleanly) or crash without losing what it already saw.
 
@@ -248,7 +266,7 @@ All files live in `src/algorithms/`. The category matches the row in `docs/Ал�
 |`thompson_bandits.py`|`ThompsonSamplingAllocator`|capital_allocation|multi|
 |`gaussian_process.py`|`GaussianProcessTrader`|bayesian_optimization|single|
 |`genetic_programming.py`|`SymbolicRegressionAlpha`|symbolic_regression|single|
-|`news_sentiment.py`|`NewsSentimentSignal`|news_sentiment|single|
+|`news_sentiment.py`|`NewsSentimentSignal`|news_sentiment|multi|
 
 Every file is a self-contained `if __name__ == "__main__":` smoke test on synthetic data: `PYTHONPATH=src python src/algorithms/<file>.py`.
 
@@ -256,8 +274,19 @@ Every file is a self-contained `if __name__ == "__main__":` smoke test on synthe
 
 ```
 alogs4trade/
-  .env
-  requirements.txt
+  .env.example
+  .github/
+    workflows/ci.yml        # pytest on every push/PR, base-install-without-news regression check
+    ISSUE_TEMPLATE/
+    pull_request_template.md
+  CITATION.cff
+  CONTRIBUTING.md
+  SECURITY.md
+  LICENSE
+  pyproject.toml        # pinned deps + [news]/[dev] extras (pip install -e ".[news,dev]")
+  requirements.txt        # pinned, single-command equivalent (pip install -r requirements.txt)
+  docs/
+    Алгоритмы.md        # pre-implementation research table each algorithm's docstring cites
   configs/
     market_simulator.json        # the live market simulator's configurator (session hours, duration, capital, ...)
   src/
@@ -267,6 +296,9 @@ alogs4trade/
       providers/
         base.py        # MarketDataProvider interface + Instrument/Candle/CandleInterval
         tinvest.py        # TInvestClient (REST, tracks real call latency), TInvestProvider, TInvestDataLoader
+      exchanges/
+        base.py        # Exchange interface (session_hours/is_open/next_open) + TradingSession
+        moex.py        # MOEXExchange - MSK calendar, used by the live simulator by default
       features.py        # shared feature engineering (make_features etc.)
       trading_env.py        # environment for RL algorithms (PPO/SAC/DDPG)
       metrics.py        # sharpe/max_drawdown/win_rate/hit_rate/pnl_rub
@@ -278,12 +310,13 @@ alogs4trade/
       ticker_linker.py        # TickerLinker - company name/brand -> MOEX ticker
       llm_sentiment.py        # LMStudioSentimentClient - LLM news scoring via LM Studio
     algorithms/        # one algorithm per file
+  tests/        # pytest, parametrized over every discover_algorithms() class (see "Tests and CI")
   scripts/
     prepare_data.py        # warming up the cache for a set of MOEX tickers
     run_benchmarks.py        # full run of all algorithms -> results/
     run_news_monitor.py        # live RSS -> LLM sentiment monitor -> data/news_signals/
     run_market_simulation.py        # live/demo market simulator entry point -> results/market_simulation.*
-  results/
+  results/        # tracked in git - aggregated metrics, not raw market data (see section 3)
     benchmark_results.json
     benchmark_results.md
     market_simulation.json
@@ -312,7 +345,39 @@ Every algorithm/backtester/simulator in this repo consumes `core.data_loader.Mar
    Nothing downstream (algorithms, `Backtester`, `BenchmarkRunner`, `MarketSimulator`) needs to know or care which provider produced `df` - they all consume the same `DataFrame`/`dict[ticker, DataFrame]` shape regardless.
 5. If you want a convenience wrapper matching `TInvestDataLoader`'s pattern (a `MarketDataLoader` subclass that wires up your provider automatically so callers don't need to import and construct it themselves), add a small subclass the same way `core/providers/tinvest.py` does for `TInvestDataLoader` - this is optional, `MarketDataLoader(MyBrokerProvider())` alone is a complete, working data source.
 
-## 9. How to add your own algorithm
+## 9. How to add your own exchange
+
+A data *provider* (section 8) answers "where do candles come from"; an *exchange* answers a separate question the live market simulator needs: "is this market open right now, and when does it open next". `MarketSimulator` consumes only `core.exchanges.base.Exchange`, never MOEX-specific hours directly, so trading on another venue's calendar also requires writing one new class and nothing else.
+
+1. Create `src/core/exchanges/my_exchange.py` (same as `providers/` - the `exchanges/` package is just a home for the ones already provided, nothing forces new ones to live there).
+2. Inherit from `Exchange` (`core/exchanges/base.py`), set a `name`, implement the `timezone` property, and implement `session_hours(local_date: date) -> TradingSession | None`:
+   ```python
+   from datetime import date, time, tzinfo
+   from core.exchanges.base import Exchange, TradingSession
+
+   class MyExchange(Exchange):
+       name = "MY-EXCHANGE"
+
+       @property
+       def timezone(self) -> tzinfo:
+           return MY_EXCHANGE_TZ
+
+       def session_hours(self, local_date: date) -> TradingSession | None:
+           if local_date.weekday() >= 5:   # closed weekends - add holidays here too if you need them
+               return None
+           return TradingSession(time(9, 30), time(16, 0))
+   ```
+   `is_open(moment)` and `next_open(moment)` are already implemented on the base class in terms of `session_hours` alone - you don't need to override them (see `MOEXExchange` for the reference implementation; it's exactly this shape).
+3. Pass it to the simulator instead of relying on the MOEX default:
+   ```python
+   from core.market_simulator import MarketSimulator, SessionConfig
+   from core.exchanges.my_exchange import MyExchange
+
+   sim = MarketSimulator(SessionConfig(...), exchange=MyExchange())
+   ```
+   This fully replaces the config-derived `MOEXExchange` (built from `session_start`/`session_end`/`trading_days` when no `exchange=` is given) - `session_hours` decides everything about when the simulator polls versus sleeps, independently of which `MarketDataProvider`/`TInvestDataLoader` is supplying the candles.
+
+## 10. How to add your own algorithm
 
 1. Create `src/algorithms/my_algo.py`.
 2. Inherit from `SingleAssetAlgorithm` or `MultiAssetAlgorithm`.
@@ -321,11 +386,24 @@ Every algorithm/backtester/simulator in this repo consumes `core.data_loader.Mar
 5. Implement `fit()` and `generate_signals()` without look-ahead.
 6. Register it in `scripts/run_benchmarks.py` via `runner.register(...)` (required for it to be included in the main run and in `results/benchmark_results.*`). Registering it separately for `run_all_benchmarks.py`/`run_market_simulation.py` is not necessary - both find the new class automatically on the next launch, as long as the constructor does not require mandatory arguments (see "Running absolutely every algorithm" above).
 
-## 10. Limitations (important to understand before using with real money)
+## 11. Tests and CI
+
+Every algorithm file already carries its own `if __name__ == "__main__":` smoke test on synthetic data (fit + generate_signals, printing the resulting signal distribution) - `tests/` wraps those in `pytest`, parametrized over every class `core.algorithm_discovery.discover_algorithms()` finds, so "does every algorithm still fit and produce a valid [-1, 1] signal" is checked automatically instead of by hand:
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+Each smoke test runs as its own subprocess, the same isolation `run_all_benchmarks.py`/the live simulator already use - mixing lightgbm/xgboost/catboost/torch/hmmlearn/hdbscan's native runtimes in one interpreter reliably segfaults once enough distinct libraries have trained a model (see the native-library pitfalls this project has hit before). `tests/test_providers.py` and `tests/test_exchanges.py` unit-test the `MarketDataProvider`/`Exchange` abstractions (sections 8-9) against fakes, with no network access or `T_INVEST_TOKEN` required - the whole suite (49 tests as of writing) needs no secrets and runs in under a minute.
+
+`.github/workflows/ci.yml` runs this on every push/PR, plus a second job that installs the project *without* the `news` extra and asserts `discover_algorithms()` still finds every other algorithm (a regression check for the "one missing optional dependency shouldn't take down the whole scan" behavior described in `core/algorithm_discovery.py`). For a project that documents its own segfaults from mixing native ML runtimes, a green CI badge is not decoration - see `CONTRIBUTING.md` for what's expected of a PR.
+
+## 12. Limitations (important to understand before using with real money)
 
 This is a research project, not a production-ready trading system: no slippage beyond fixed bps, no accounting for liquidity or order limits, no portfolio risk management, no live *execution* through T-Invest (only read-only access to market data is used - `T_INVEST_TOKEN` never places an order anywhere in this repo, including in the live market simulator, which is paper trading against a `SimulatedBroker`, not a real account). The metrics in `results/benchmark_results.md` are out-of-sample on a single chronological split of a single set of MOEX stocks, and are no substitute for full walk-forward validation; money P&L figures (`pnl_rub`) are notional, computed from a configurable default starting capital of 1,000,000 ₽, not a claim about what any real account would have made. The news-sentiment monitor (section 4) additionally has no historical RSS archive to validate against, and its LLM-generated `reasoning`/`direction` is a model opinion, not a verified fact - cross-check against official disclosure (e.g. e-disclosure.ru) before acting on it.
 
-## 11. Why this project was created
+## 13. Why this project was created
 
 This project is part of my work on researching various algorithms for trading on the stock market.
 
@@ -333,13 +411,6 @@ After fully implementing the methods, tests and core components, I thought my im
 
 There may be errors in the code; please report them in `pull requests`.
 
-## 12. AI Usage
+## 14. AI Usage
 
-AI is used in this project to verify the correctness of certain algorithm implementations and to produce initial translations of in-code comments into English. The model used is Claude Sonnet 5.
-#### Requirements for AI-Assisted Code
-If you intend to contribute code written with the help of AI, the following rules are strongly recommended:
-- cover such code with tests;
-- verify that it contains no critical defects or model hallucinations;
-- explicitly mark generated fragments in the source code;
-- indicate the use of AI in the commit and specify in its description exactly which changes were AI-generated;
-- Add information about AI model you used;
+AI is used in this project to verify the correctness of certain algorithm implementations and to produce initial translations of in-code comments into English. The model used is Claude Sonnet 5. Rules for contributing AI-assisted code moved to `CONTRIBUTING.md` (GitHub links it directly from the PR/issue creation form, where a contributor is more likely to actually see it before submitting).

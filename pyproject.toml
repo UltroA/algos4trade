@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "algos4trade"
+version = "1.0.0"
+description = "Benchmark suite of 31+ algorithmic trading strategies backtested on real MOEX market data via the T-Invest API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+
+# Pinned to the exact versions results/*.md were generated with (see README
+# "Installation and setup" for why unpinned deps break reproducibility a
+# year later). On Linux specifically, plain `pip install -e .` can resolve
+# torch's default CUDA build (~2.5 GB of extra wheels) even on a machine
+# with no GPU - this project only ever runs torch on CPU. To avoid that,
+# install the exact pinned CPU wheel first, from PyTorch's own CPU index;
+# pip will then see the pin is already satisfied and won't re-resolve it:
+#   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -e .
+dependencies = [
+    "numpy==2.5.1",
+    "pandas==3.0.5",
+    "scipy==1.18.0",
+    "scikit-learn==1.9.0",
+    "lightgbm==4.7.0",
+    "xgboost==3.4.0",
+    "catboost==1.2.10",
+    "hmmlearn==0.3.3",
+    "hdbscan==0.8.44",
+    "torch==2.13.0",
+    "gplearn==0.4.3",
+    "python-dotenv==1.2.2",
+    "pyarrow==25.0.0",
+    "requests==2.34.2",
+    "tabulate==0.10.0",
+    "psutil==7.2.2",
+]
+
+[project.optional-dependencies]
+# Only needed for the live news-sentiment pipeline (scripts/run_news_monitor.py,
+# algorithms/news_sentiment.py, algorithms/news_sentiment_memory.py's LLM
+# rescoring). Every other algorithm/backtester/simulator works without it -
+# core.algorithm_discovery.discover_algorithms() reports a module needing
+# this extra as a "failed to import" entry instead of crashing the scan.
+news = [
+    "feedparser==6.0.14",
+    "openai==2.53.0",
+    "pydantic==2.13.4",
+]
+# Only needed to run tests/ (see "Tests and CI" in README).
+dev = [
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

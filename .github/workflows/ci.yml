@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Full test suite (all algorithms, base + news extras)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install torch (CPU wheel)
+        # This project only ever runs torch on CPU; without pinning to the
+        # CPU index first, pip on Linux can resolve the default CUDA build
+        # (~2.5 GB of extra wheels) instead - see pyproject.toml's comment.
+        run: pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install project (base + news + dev extras)
+        run: pip install -e ".[news,dev]"
+
+      - name: Run tests
+        # No T_INVEST_TOKEN needed: every algorithm's own smoke test (which
+        # tests/test_algorithm_smoke.py wraps) runs on synthetic data only,
+        # never touches the T-Invest API - see README section 6.
+        run: pytest -v
+
+  base-install:
+    name: Base install (no news extra) still discovers every other algorithm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install torch (CPU wheel)
+        run: pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install project (base only, no [news] extra)
+        run: pip install -e .
+
+      - name: Discovery must not crash without the news extra
+        # Regression check for core.algorithm_discovery.discover_algorithms():
+        # algorithms/news_sentiment_memory.py needs feedparser/openai/pydantic
+        # (the "news" extra) and is expected to land in `failed`, not take
+        # down the whole scan - see its docstring and CONTRIBUTING.md.
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, 'src')
+          from core.algorithm_discovery import discover_algorithms
+          found, skipped, failed = discover_algorithms()
+          print(f'found={len(found)} skipped={len(skipped)} failed={len(failed)}')
+          assert len(found) >= 34, found
+          assert any(m == 'news_sentiment_memory' for m, _ in failed), failed
+          "

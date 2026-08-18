@@ -5,6 +5,7 @@ from .benchmark_runner import BenchmarkRunner
 # `MarketDataLoader` back from `.data_loader`, so `.data_loader` needs to already be
 # fully loaded into sys.modules by the time that happens (see `providers/__init__.py`).
 from .data_loader import MarketDataLoader
+from .exchanges import Exchange, MOEXExchange, TradingSession
 from .providers.base import Candle, CandleInterval, Instrument, MarketDataProvider
 from .providers.tinvest import TInvestAPIError, TInvestClient, TInvestDataLoader, TInvestProvider
 from .market_simulator import MarketSimulator, SessionConfig, SimulatedBroker
@@ -24,6 +25,9 @@ __all__ = [
     "CandleInterval",
     "Instrument",
     "MarketDataProvider",
+    "Exchange",
+    "MOEXExchange",
+    "TradingSession",
     "TInvestAPIError",
     "TInvestDataLoader",
     "TInvestProvider",

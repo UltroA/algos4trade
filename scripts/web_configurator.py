@@ -126,7 +126,7 @@ def _algorithm_catalog() -> dict:
     global _algorithm_catalog_cache
     if _algorithm_catalog_cache is not None:
         return _algorithm_catalog_cache
-    found, skipped = discover_algorithms()
+    found, skipped, failed = discover_algorithms()
     catalog = []
     for modname, clsname in found:
         module = importlib.import_module(f"algorithms.{modname}")
@@ -142,6 +142,7 @@ def _algorithm_catalog() -> dict:
     _algorithm_catalog_cache = {
         "found": catalog,
         "skipped": [{"module": m, "class": c} for m, c in skipped],
+        "failed_import": [{"module": m, "error": e} for m, e in failed],
     }
     return _algorithm_catalog_cache
 

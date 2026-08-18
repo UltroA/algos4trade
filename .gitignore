@@ -2,8 +2,13 @@
 .venv
 .env
 .DS_Store
-results/
+# Aggregated benchmark/session metrics (results/*.md, results/*.json) are
+# tracked - they're the point of a benchmark repo. Only transient autosave
+# snapshots and operational logs from in-progress/local runs are ignored.
+results/*_progress.json
+results/*.log
 __pycache__/
+*.egg-info/
 src/core/certs/_combined_ca_bundle.pem
 src/core/certs/russian_trusted_ca.pem
 /data

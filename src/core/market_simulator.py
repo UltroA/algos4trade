@@ -26,7 +26,14 @@ Two differences from core.backtester.Backtester that matter here:
 Session hours (SessionConfig.session_start/end, trading_days) and
 max_duration_seconds are "the configurator that determines runtime" - they
 say when the simulator is actually working (polling/trading) versus asleep,
-and how long a run is allowed to go before it stops and finalizes.
+and how long a run is allowed to go before it stops and finalizes. Which
+calendar those three fields (and "is it open right now") are checked
+against is itself pluggable: `MarketSimulator(config, exchange=...)` takes
+any `core.exchanges.base.Exchange` implementation (see that module's
+docstring) and defaults to `MOEXExchange` built from this same config, so
+existing configs/behavior are unchanged unless a different exchange is
+passed in explicitly - the exchange-agnostic counterpart of `core.
+providers.base.MarketDataProvider` (which data source is used).
 
 Warm-up fit isolation: both `run_live()` and `run_replay_demo()` fit every
 algorithm in its own subprocess (`specs={name: (module_name, class_name)}`,
@@ -68,6 +75,7 @@ from sklearn.exceptions import ConvergenceWarning
 
 from .base import AlgorithmCategory, BaseTradingAlgorithm, InputMode
 from .benchmark_runner import BenchmarkRunner
+from .exchanges import Exchange, MOEXExchange
 from .metrics import BacktestMetrics, compute_hit_rate, compute_metrics
 from .providers.tinvest import TInvestClient, TInvestDataLoader
 
@@ -79,7 +87,6 @@ from .providers.tinvest import TInvestClient, TInvestDataLoader
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 logging.getLogger("hmmlearn").setLevel(logging.ERROR)
 
-MSK = timezone(timedelta(hours=3))
 _NEWS_LOG_DIR = Path("data/news_signals")
 
 
@@ -362,11 +369,22 @@ class MarketSimulator:
         config: SessionConfig,
         loader: TInvestDataLoader | None = None,
         client: TInvestClient | None = None,
+        exchange: Exchange | None = None,
     ):
         self.config = config
         self.client = client or TInvestClient()
         self.loader = loader or TInvestDataLoader(client=self.client)
         self.latency = LatencyTracker(self.client)
+        # Defaults to MOEX, built from this config's own session_start/
+        # session_end/trading_days (so existing configs/market_simulator.json
+        # files keep working unchanged). Pass an `Exchange` explicitly to
+        # trade a different venue - its own timezone/calendar then fully
+        # replaces those three config fields, see core.exchanges.base.
+        self.exchange = exchange or MOEXExchange(
+            session_start=dt_time.fromisoformat(config.session_start),
+            session_end=dt_time.fromisoformat(config.session_end),
+            trading_weekdays=frozenset(config.trading_days),
+        )
         self.results_dir = Path(config.results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self._news_proc: subprocess.Popen | None = None
@@ -384,24 +402,6 @@ class MarketSimulator:
 
     def _primary_ticker(self) -> str:
         return self.config.tickers[0]
-
-    # -- session clock ------------------------------------------------------
-
-    def _is_trading_time(self, now_msk: datetime) -> bool:
-        if now_msk.weekday() not in self.config.trading_days:
-            return False
-        start_t = dt_time.fromisoformat(self.config.session_start)
-        end_t = dt_time.fromisoformat(self.config.session_end)
-        return start_t <= now_msk.time() <= end_t
-
-    def _next_session_open(self, now_msk: datetime) -> datetime:
-        start_t = dt_time.fromisoformat(self.config.session_start)
-        candidate = now_msk.replace(hour=start_t.hour, minute=start_t.minute, second=0, microsecond=0)
-        if candidate <= now_msk:
-            candidate += timedelta(days=1)
-        while candidate.weekday() not in self.config.trading_days:
-            candidate += timedelta(days=1)
-        return candidate
 
     # -- warm-up --------------------------------------------------------------
 
@@ -593,11 +593,14 @@ class MarketSimulator:
                     print("[simulator] max_duration_seconds reached, stopping.")
                     break
 
-                now_msk = now_utc.astimezone(MSK)
-                if not self._is_trading_time(now_msk):
-                    next_open = self._next_session_open(now_msk)
-                    sleep_s = max(1.0, min((next_open - now_msk).total_seconds(), self.config.poll_interval_seconds * 10))
-                    print(f"[simulator] outside session hours (MSK {now_msk:%a %H:%M}), sleeping {sleep_s:.0f}s ...")
+                if not self.exchange.is_open(now_utc):
+                    next_open = self.exchange.next_open(now_utc)
+                    now_local = now_utc.astimezone(self.exchange.timezone)
+                    sleep_s = max(1.0, min((next_open - now_local).total_seconds(), self.config.poll_interval_seconds * 10))
+                    print(
+                        f"[simulator] outside {self.exchange.name} session hours "
+                        f"({now_local:%a %H:%M}), sleeping {sleep_s:.0f}s ..."
+                    )
                     time.sleep(sleep_s)
                     continue
 

@@ -187,12 +187,16 @@ def _run_one_algorithm(modname: str, clsname: str, bar: ProgressBar) -> dict:
 
 
 def main() -> None:
-    found, skipped = discover_algorithms()
+    found, skipped, failed = discover_algorithms()
     print(f"Algorithms found in src/algorithms/: {len(found)}")
     if skipped:
         print(f"Skipped (require required constructor arguments, see run_composite_benchmarks.py): {len(skipped)}")
         for modname, clsname in skipped:
             print(f"  - {modname}.{clsname}")
+    if failed:
+        print(f"Failed to import (likely a missing optional dependency, e.g. the \"news\" extra): {len(failed)}")
+        for modname, error in failed:
+            print(f"  - {modname}: {error}")
     print()
 
     bar = ProgressBar(total=len(found))
@@ -204,7 +208,7 @@ def main() -> None:
         # Autosave after every algorithm - a run killed partway through
         # (segfault storm, Ctrl-C, machine sleep) still leaves everything
         # completed so far in results/all_benchmark_results.{json,md}.
-        _save_results(rows, found, skipped)
+        _save_results(rows, found, skipped, failed)
 
     print("\nSaved results/all_benchmark_results.json and .md")
 
@@ -213,15 +217,22 @@ def main() -> None:
         print(f"Finished with errors: {n_errors}/{len(rows)}")
 
 
-def _save_results(rows: list[dict], found: list[tuple[str, str]], skipped: list[tuple[str, str]]) -> None:
+def _save_results(
+    rows: list[dict],
+    found: list[tuple[str, str]],
+    skipped: list[tuple[str, str]],
+    failed: list[tuple[str, str]],
+) -> None:
     results_df = pd.DataFrame(rows).drop(columns=["algo_display_name", "class_name"], errors="ignore")
     RESULTS_DIR.mkdir(exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "n_algorithms_found": len(found),
         "n_algorithms_skipped": len(skipped),
+        "n_algorithms_failed_import": len(failed),
         "n_algorithms_completed": len(rows),
         "skipped": [f"{modname}.{clsname}" for modname, clsname in skipped],
+        "failed_import": [{"module": modname, "error": error} for modname, error in failed],
         "results": results_df.to_dict(orient="records"),
     }
     (RESULTS_DIR / "all_benchmark_results.json").write_text(

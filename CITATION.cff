@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "algos4trade: A Benchmark Suite of Algorithmic Trading Strategies on Real MOEX Market Data"
+type: software
+authors:
+  - family-names: "Воронин"
+    given-names: "Илья"
+    alias: "UltroA"
+url: "https://github.com/UltroA/alogs4trade"
+repository-code: "https://github.com/UltroA/alogs4trade"
+license: Apache-2.0
+keywords:
+  - algorithmic-trading
+  - moex
+  - backtesting
+  - quantitative-finance
+  - benchmark
+  - machine-learning
+  - reinforcement-learning

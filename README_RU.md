@@ -1,8 +1,14 @@
 [English](./README.md) | **Русский**
 
+[![CI](https://github.com/UltroA/alogs4trade/actions/workflows/ci.yml/badge.svg)](https://github.com/UltroA/alogs4trade/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
+
 Проект реализует торговые алгоритмы как ООП-классы с единым интерфейсом, поверх реальных исторических данных MOEX из T-Invest API.
 
 ## 1. Установка и запуск
+
+Требуется **Python 3.12** (разработано и зафиксировано на 3.12.7 - `requirements.txt`/`pyproject.toml` закреплены на версиях, на которых реально считались `results/*.md`, см. "Зачем фиксировать версии" ниже).
 
 ```bash
 cd alogs4trade
@@ -11,17 +17,29 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-В `.env` (в корне `alogs4trade/`) должен быть токен:
+Либо через `pyproject.toml` (эквивалентно, но позволяет пропустить зависимости пайплайна новостного сентимента, если он не нужен - см. раздел 4):
+
+```bash
+pip install -e .              # база: всё, кроме новостного пайплайна
+pip install -e ".[news]"      # база + feedparser/openai/pydantic, для scripts/run_news_monitor.py
+pip install -e ".[dev]"       # + pytest, для запуска tests/ (см. "Тесты и CI" ниже)
+```
+
+> **Нюанс с torch на Linux:** именно на Linux обычный `pip install` может подтянуть дефолтную CUDA-сборку torch (~2.5 ГБ лишних колёс) даже на машине без GPU - в этом проекте torch всегда работает только на CPU. Чтобы этого избежать, сначала поставьте зафиксированную CPU-сборку из собственного CPU-индекса PyTorch (тогда pip увидит, что версия уже удовлетворена, и не будет её переразрешать): `pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu`, а затем выполните команду установки выше.
+
+**Зачем фиксировать версии:** нефиксированный `requirements.txt` кажется безобидным, пока кто-нибудь не перезапустит его через год - тогда `pip install -r requirements.txt` соберёт актуальные на тот момент `numpy`/`torch`/`scikit-learn`, а не те, на которых считались цифры в `results/*.md`, и нет никакой гарантии, что эти цифры воспроизведутся на другой версии библиотек. Сначала зафиксировать, потом бенчмаркать.
+
+Скопируйте `.env.example` в `.env` и впишите свой токен:
 
 ```
 T_INVEST_TOKEN=t.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Токен можно взять только с правами **на чтение** (read-only) - для загрузки исторических свечей торговые права не нужны.
+Токен можно взять только с правами **на чтение** (read-only) - для загрузки исторических свечей торговые права не нужны. См. `SECURITY.md` про обращение с токеном (никогда не коммитьте `.env`, никогда не вставляйте токен в issue/лог).
 
-> **SSL-нюанс:** домен `*.tinkoff.ru` сейчас отдаёт сертификат, выпущенный корневым УЦ Минцифры России ("Russian Trusted Root CA"), который по умолчанию отсутствует в доверенных хранилищах сертификатов за пределами РФ. `core/tinvest_client.py` уже решает это сам - собирает CA-бандл из `certifi` + `core/certs/russian_trusted_ca.pem`. Никаких дополнительных действий не требуется.
+> **SSL-нюанс:** домен `*.tinkoff.ru` сейчас отдаёт сертификат, выпущенный корневым УЦ Минцифры России ("Russian Trusted Root CA"), который по умолчанию отсутствует в доверенных хранилищах сертификатов за пределами РФ. `core/providers/tinvest.py` уже решает это сам - собирает CA-бандл из `certifi` + `core/certs/russian_trusted_ca.pem`. Никаких дополнительных действий не требуется.
 
-Любой скрипт, использующий алгоритмы, должен добавить `src/` в `sys.path` (или запускаться с `PYTHONPATH=src`) и вызвать `load_dotenv()` до создания `TInvestDataLoader`:
+Если вы использовали `pip install -e .` выше, `core`/`algorithms` уже импортируются откуда угодно - можно сразу переходить к `load_dotenv()`. Иначе любой скрипт, использующий алгоритмы, должен добавить `src/` в `sys.path` (или запускаться с `PYTHONPATH=src`) и вызвать `load_dotenv()` до создания `TInvestDataLoader`:
 
 ```python
 import sys
@@ -194,7 +212,7 @@ python scripts/run_all_benchmarks.py
 - **Настоящий брокерский учёт, а не формула доходности.** У каждого алгоритма свой `SimulatedBroker` - реальный счёт с наличными и позициями по каждому тикеру, который перебалансируется на каждом тике и платит `transaction_cost_bps` за каждую сделку, как настоящая брокерская выписка. Именно из этого учёта считаются "деньги выиграно/проиграно" (`pnl_rub`, `final_capital`), а не по формуле `total_return * starting_capital`.
 - **Настоящее время, настоящая задержка.** В режиме по умолчанию (live) каждая "новая свеча" реально запрашивается у T-Invest в момент, когда она появляется (`TInvestDataLoader.load_recent(use_cache=False)`) - никакая задержка не имитируется, темп сессии в реальном времени - это и есть настоящий сетевой round-trip. `TInvestClient` теперь фиксирует время отклика каждого своего вызова; в итоговом отчёте есть статистика этой задержки (mean/p50/p95/max). Отдельно есть режим `--demo` - он существует только для того, чтобы весь конвейер можно было прогнать за минуты, не дожидаясь реальных торговых часов: он переигрывает уже загруженные недавние свечи и делает синтетическую паузу на каждый тик, *взятую из этой же реально измеренной задержки*, а не из выдуманной константы.
 
-**Конфигуратор** - `configs/market_simulator.json` - определяет, когда симулятор вообще работает (`session_start`/`session_end` по МСК, `trading_days`, соответствуют основной сессии MOEX) и как долго может идти прогон (`max_duration_seconds`, `poll_interval_seconds`), а также `tickers`, `interval`, `starting_capital_rub`, `transaction_cost_bps`, `warmup_days` (история, на которой каждый алгоритм обучается перед выходом в live), `autosave_every_ticks` и `run_news_monitor`.
+**Конфигуратор** - `configs/market_simulator.json` - определяет, когда симулятор вообще работает (`session_start`/`session_end` по МСК, `trading_days`, соответствуют основной сессии MOEX) и как долго может идти прогон (`max_duration_seconds`, `poll_interval_seconds`), а также `tickers`, `interval`, `starting_capital_rub`, `transaction_cost_bps`, `warmup_days` (история, на которой каждый алгоритм обучается перед выходом в live), `autosave_every_ticks` и `run_news_monitor`. Эти три поля сессии питают `core.exchanges.base.Exchange` (по умолчанию `MOEXExchange`), который отвечает на вопрос "открыт ли рынок прямо сейчас" - передайте `MarketSimulator(config, exchange=...)` со своей реализацией `Exchange`, чтобы торговать по календарю другой биржи вместо MOEX (см. раздел 9).
 
 **Автосохранение**: `results/<basename>_progress.json` перезаписывается каждые `autosave_every_ticks` тиков на всём протяжении сессии - многочасовую живую сессию можно прервать (Ctrl-C перехватывается и корректно завершает сессию) или она может упасть, не потеряв то, что уже успела увидеть.
 
@@ -248,7 +266,7 @@ python scripts/run_market_simulation.py --demo --duration 60 \
 |`thompson_bandits.py`|`ThompsonSamplingAllocator`|capital_allocation|multi|
 |`gaussian_process.py`|`GaussianProcessTrader`|bayesian_optimization|single|
 |`genetic_programming.py`|`SymbolicRegressionAlpha`|symbolic_regression|single|
-|`news_sentiment.py`|`NewsSentimentSignal`|news_sentiment|single|
+|`news_sentiment.py`|`NewsSentimentSignal`|news_sentiment|multi|
 
 Каждый файл - самодостаточный `if __name__ == "__main__":` смок-тест на синтетических данных: `PYTHONPATH=src python src/algorithms/<файл>.py`.
 
@@ -256,8 +274,19 @@ python scripts/run_market_simulation.py --demo --duration 60 \
 
 ```
 alogs4trade/
-  .env
-  requirements.txt
+  .env.example
+  .github/
+    workflows/ci.yml        # pytest на каждый push/PR, регрессия базовой установки без news
+    ISSUE_TEMPLATE/
+    pull_request_template.md
+  CITATION.cff
+  CONTRIBUTING.md
+  SECURITY.md
+  LICENSE
+  pyproject.toml        # зафиксированные зависимости + extras [news]/[dev] (pip install -e ".[news,dev]")
+  requirements.txt        # зафиксированный, однокомандный эквивалент (pip install -r requirements.txt)
+  docs/
+    Алгоритмы.md        # таблица ожиданий до реализации, на которую ссылается докстринг каждого алгоритма
   configs/
     market_simulator.json        # конфигуратор живого симулятора рынка (торговые часы, длительность, капитал, ...)
   src/
@@ -267,6 +296,9 @@ alogs4trade/
       providers/
         base.py        # интерфейс MarketDataProvider + Instrument/Candle/CandleInterval
         tinvest.py        # TInvestClient (REST, фиксирует реальную задержку вызовов), TInvestProvider, TInvestDataLoader
+      exchanges/
+        base.py        # интерфейс Exchange (session_hours/is_open/next_open) + TradingSession
+        moex.py        # MOEXExchange - календарь по МСК, используется живым симулятором по умолчанию
       features.py        # общая инженерия признаков (make_features и т.д.)
       trading_env.py        # окружение для RL-алгоритмов (PPO/SAC/DDPG)
       metrics.py        # sharpe/max_drawdown/win_rate/hit_rate/pnl_rub
@@ -278,12 +310,13 @@ alogs4trade/
       ticker_linker.py        # TickerLinker - название/бренд компании -> тикер MOEX
       llm_sentiment.py        # LMStudioSentimentClient - оценка новостей через LM Studio
     algorithms/        # по одному алгоритму на файл
+  tests/        # pytest, параметризован по всем классам discover_algorithms() (см. "Тесты и CI")
   scripts/
     prepare_data.py        # прогрев кэша по набору тикеров MOEX
     run_benchmarks.py        # полный прогон всех алгоритмов -> results/
     run_news_monitor.py        # живой мониторинг RSS -> LLM-сентимент -> data/news_signals/
     run_market_simulation.py        # точка входа живого/демо-симулятора рынка -> results/market_simulation.*
-  results/
+  results/        # хранится в git - агрегированные метрики, а не сырые рыночные данные (см. раздел 3)
     benchmark_results.json
     benchmark_results.md
     market_simulation.json
@@ -312,7 +345,39 @@ alogs4trade/
    Нижестоящему коду (алгоритмам, `Backtester`, `BenchmarkRunner`, `MarketSimulator`) не важно, какой провайдер сформировал `df` - все они работают с одной и той же формой `DataFrame`/`dict[ticker, DataFrame]` независимо от источника.
 5. Если нужна обёртка-удобство по образцу `TInvestDataLoader` (подкласс `MarketDataLoader`, автоматически связывающий его с вашим провайдером, чтобы вызывающему коду не нужно было импортировать и создавать провайдер вручную) - добавьте небольшой подкласс так же, как это делает `core/providers/tinvest.py` для `TInvestDataLoader`. Это необязательно: `MarketDataLoader(MyBrokerProvider())` сам по себе уже полностью рабочий источник данных.
 
-## 9. Как добавить свой алгоритм
+## 9. Как добавить свою биржу
+
+Провайдер данных (раздел 8) отвечает на вопрос "откуда берутся свечи"; биржа отвечает на другой вопрос, нужный живому симулятору рынка: "открыт ли этот рынок прямо сейчас, и когда он откроется в следующий раз". `MarketSimulator` использует только `core.exchanges.base.Exchange`, а не торговые часы MOEX напрямую - поэтому торговля по календарю другой площадки тоже требует написать один новый класс и больше ничего.
+
+1. Создать `src/core/exchanges/my_exchange.py` (как и с `providers/` - пакет `exchanges/` просто дом для уже готовых реализаций, ничто не заставляет новые жить именно там).
+2. Отнаследоваться от `Exchange` (`core/exchanges/base.py`), задать `name`, реализовать свойство `timezone` и метод `session_hours(local_date: date) -> TradingSession | None`:
+   ```python
+   from datetime import date, time, tzinfo
+   from core.exchanges.base import Exchange, TradingSession
+
+   class MyExchange(Exchange):
+       name = "MY-EXCHANGE"
+
+       @property
+       def timezone(self) -> tzinfo:
+           return MY_EXCHANGE_TZ
+
+       def session_hours(self, local_date: date) -> TradingSession | None:
+           if local_date.weekday() >= 5:   # закрыто по выходным - здесь же можно добавить праздники
+               return None
+           return TradingSession(time(9, 30), time(16, 0))
+   ```
+   `is_open(moment)` и `next_open(moment)` уже реализованы в базовом классе через один только `session_hours` - переопределять их не нужно (см. `MOEXExchange` как эталонную реализацию - она устроена ровно так же).
+3. Передать её симулятору вместо того, чтобы полагаться на MOEX по умолчанию:
+   ```python
+   from core.market_simulator import MarketSimulator, SessionConfig
+   from core.exchanges.my_exchange import MyExchange
+
+   sim = MarketSimulator(SessionConfig(...), exchange=MyExchange())
+   ```
+   Это полностью заменяет собранный из конфига `MOEXExchange` (построенный из `session_start`/`session_end`/`trading_days`, когда `exchange=` не передан) - `session_hours` полностью определяет, когда симулятор опрашивает рынок, а когда спит, независимо от того, какой `MarketDataProvider`/`TInvestDataLoader` поставляет свечи.
+
+## 10. Как добавить свой алгоритм
 
 1. Создать `src/algorithms/my_algo.py`.
 2. Отнаследоваться от `SingleAssetAlgorithm` или `MultiAssetAlgorithm`.
@@ -321,11 +386,24 @@ alogs4trade/
 5. Реализовать `fit()` и `generate_signals()` без заглядывания в будущее.
 6. Зарегистрировать в `scripts/run_benchmarks.py` через `runner.register(...)` (нужно для попадания в основной прогон и в `results/benchmark_results.*`). Регистрировать отдельно для `run_all_benchmarks.py`/`run_market_simulation.py` не нужно - оба находят новый класс автоматически при следующем запуске, если конструктор не требует обязательных аргументов (см. "Прогон вообще всех алгоритмов" выше).
 
-## 10. Ограничения (важно понимать перед использованием на реальных деньгах)
+## 11. Тесты и CI
+
+В каждом файле алгоритма уже есть собственный smoke-тест `if __name__ == "__main__":` на синтетических данных (fit + generate_signals, вывод распределения полученного сигнала) - `tests/` оборачивает их в `pytest`, параметризованный по всем классам, которые находит `core.algorithm_discovery.discover_algorithms()`, так что "у всех ли алгоритмов по-прежнему получается обучиться и выдать корректный сигнал в [-1, 1]" проверяется автоматически, а не руками:
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+Каждый smoke-тест запускается в своём подпроцессе - та же изоляция, что уже использует `run_all_benchmarks.py`/живой симулятор: смешивание нативных рантаймов lightgbm/xgboost/catboost/torch/hmmlearn/hdbscan в одном интерпретаторе на практике надёжно сегфолтит после обучения на достаточном числе разных библиотек (см. уже случавшиеся в проекте проблемы с нативными библиотеками). `tests/test_providers.py` и `tests/test_exchanges.py` юнит-тестируют абстракции `MarketDataProvider`/`Exchange` (разделы 8-9) на фейках, без сетевого доступа и без `T_INVEST_TOKEN` - весь набор (49 тестов на момент написания) не требует секретов и выполняется меньше минуты.
+
+`.github/workflows/ci.yml` прогоняет это на каждый push/PR, плюс отдельная джоба, которая ставит проект *без* extra `news` и проверяет, что `discover_algorithms()` всё равно находит все остальные алгоритмы (регрессионная проверка поведения "одна недостающая опциональная зависимость не должна валить весь скан", описанного в `core/algorithm_discovery.py`). Для проекта, который сам документирует свои сегфолты от смешения нативных ML-рантаймов, зелёный бейдж CI - не украшение; см. `CONTRIBUTING.md` о том, что ожидается от PR.
+
+## 12. Ограничения (важно понимать перед использованием на реальных деньгах)
 
 Это исследовательский проект, а не production-ready торговая система: без учёта проскальзывания сверх фиксированных бп, без учёта ликвидности/лимитов заявок, без риск-менеджмента портфеля, без реального *исполнения* через T-Invest (используется только read-only доступ к рыночным данным - `T_INVEST_TOKEN` нигде в этом репозитории, включая живой симулятор рынка, не выставляет заявки; симулятор ведёт бумажную торговлю через `SimulatedBroker`, а не реальный счёт). Метрики в `results/benchmark_results.md` - out-of-sample на одном хронологическом сплите одного набора акций MOEX, не заменяют полноценную walk-forward валидацию; денежные показатели P&L (`pnl_rub`) условны и считаются от настраиваемого стартового капитала по умолчанию в 1 000 000 ₽, а не являются утверждением о том, что заработал бы реальный счёт. У мониторинга новостей (раздел 4) дополнительно нет исторического RSS-архива для проверки, а его LLM-генерируемые `reasoning`/`direction` - это мнение модели, а не проверенный факт: сверяйтесь с официальным раскрытием (например, e-disclosure.ru), прежде чем действовать на его основе.
 
-## 11. Зачем этот проект создан
+## 13. Зачем этот проект создан
 
 Данный проект является частью моей работы по исследованию различных алгоритмов для торгов на фондовом рынке.
 
@@ -333,13 +411,6 @@ alogs4trade/
 
 В коде могут быть ошибки, просьба указывать их в `pull requests`.
 
-## 12. Использование ИИ
+## 14. Использование ИИ
 
-В проекте ИИ применяется для верификации корректности реализации отдельных алгоритмов, а также для первичного перевода комментариев в коде на английский язык. Используемая модель — Claude Sonnet 5.
-#### Требования к коду, созданному с помощью ИИ
-Если вы планируете внести в репозиторий код, написанный с использованием ИИ, настоятельно рекомендуется соблюдать следующие правила:
-- покрыть такой код тестами;
-- убедиться в отсутствии критических ошибок и галлюцинаций модели;
-- явно пометить сгенерированные фрагменты в исходном коде;
-- отметить факт использования ИИ в коммите и указать в его описании, какие именно изменения были сгенерированы;
-- добавить информацию о использованной модели;
+В проекте ИИ применяется для верификации корректности реализации отдельных алгоритмов, а также для первичного перевода комментариев в коде на английский язык. Используемая модель — Claude Sonnet 5. Правила для контрибьюторов, использующих ИИ, перенесены в `CONTRIBUTING.md` (GitHub показывает ссылку на него прямо в форме создания PR/issue, где контрибьютор действительно увидит их до отправки).
