@@ -120,6 +120,7 @@ class SACAgent(SingleAssetAlgorithm):
         self.seed = seed
         torch.manual_seed(seed)
         random.seed(seed)
+        np.random.seed(seed)
 
         self.policy: _GaussianTanhPolicy | None = None
         self.critic: _QCritic | None = None

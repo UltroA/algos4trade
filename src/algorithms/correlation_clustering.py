@@ -59,16 +59,23 @@ class CorrelationClustering(MultiAssetAlgorithm):
         returns_df = pd.DataFrame({t: returns[t].reindex(common_index) for t in tickers})
         corr = returns_df.corr()
 
-        unassigned = set(tickers)
+        # Sorted list, not a set: set iteration order depends on Python's
+        # per-process string hash seed (PYTHONHASHSEED, randomized by default
+        # and re-rolled in every worker subprocess spawned by
+        # run_all_benchmarks.py / the market simulator), so unassigned.pop()
+        # picked a different "seed" ticker on every run and produced
+        # different clusters from identical data - verified by bisection
+        # after cross-run Sharpe swung by ~0.7 with no code change.
+        unassigned = sorted(tickers)
         cluster_of: dict[str, int] = {}
         next_cluster_id = 0
         while unassigned:
-            seed = unassigned.pop()
+            seed = unassigned.pop(0)
             members = [seed]
             for other in list(unassigned):
                 if corr.loc[seed, other] > self.corr_threshold:
                     members.append(other)
-                    unassigned.discard(other)
+                    unassigned.remove(other)
 
             label = next_cluster_id if len(members) >= 2 else -1
             for m in members:

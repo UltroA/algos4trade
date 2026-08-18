@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.data_loader import TInvestDataLoader
+from core.providers.tinvest import TInvestDataLoader
 
 TICKERS = ["SBER", "GAZP", "LKOH", "GMKN", "VTBR", "ROSN", "NVTK", "MTSS", "TATN", "MOEX"]
 START = datetime(2019, 1, 1, tzinfo=timezone.utc)

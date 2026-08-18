@@ -34,6 +34,7 @@ class CatBoostRanker(SingleAssetAlgorithm):
         depth: int = 4,
         learning_rate: float = 0.05,
         signal_strength: float = 4.0,
+        seed: int = 0,
         **kwargs,
     ):
         super().__init__(
@@ -42,6 +43,7 @@ class CatBoostRanker(SingleAssetAlgorithm):
             depth=depth,
             learning_rate=learning_rate,
             signal_strength=signal_strength,
+            seed=seed,
             **kwargs,
         )
         self.horizon = horizon
@@ -52,8 +54,9 @@ class CatBoostRanker(SingleAssetAlgorithm):
             learning_rate=learning_rate,
             verbose=False,
             allow_writing_files=False,
+            random_seed=seed,
             **{k: v for k, v in kwargs.items() if k not in {"horizon", "iterations", "depth",
-                                                            "learning_rate", "signal_strength"}},
+                                                            "learning_rate", "signal_strength", "seed"}},
         )
 
     def fit(self, train_data: pd.DataFrame) -> "CatBoostRanker":

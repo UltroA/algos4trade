@@ -1,9 +1,11 @@
 """
-Thin REST client for the T-Invest API (T-Bank Investments).
+T-Invest API (T-Bank Investments) implementation of the provider-agnostic
+market-data interface defined in `core.providers.base`.
 
 The official gRPC SDK (the ``tinkoff-investments`` package) is not
-available on PyPI at the time of writing, so the public REST/JSON gateway
-(grpc-gateway) of the T-Invest API is used instead: https://invest-public-api.tinkoff.ru/rest/...
+available on PyPI at the time of writing, so `TInvestClient` talks to the
+public REST/JSON gateway (grpc-gateway) of the T-Invest API instead:
+https://invest-public-api.tinkoff.ru/rest/...
 
 The ``tinkoff.ru`` domain serves a certificate issued by the Russian
 Ministry of Digital Development's root certification authority
@@ -11,6 +13,15 @@ Ministry of Digital Development's root certification authority
 stores outside Russia by default. So the client verifies the TLS chain
 against a combined bundle: standard certifi + the Ministry of Digital
 Development's certificates (``certs/russian_trusted_ca.pem``).
+
+`TInvestClient` is the raw REST client (T-Invest's own request/response
+shapes throughout). `TInvestProvider` adapts it to the generic
+`MarketDataProvider` interface so it can be handed to
+`core.data_loader.MarketDataLoader`. `TInvestDataLoader` is a thin
+convenience subclass of `MarketDataLoader` that wires up `TInvestProvider`
+automatically, kept only so existing call sites written against the old
+T-Invest-specific loader (`TInvestDataLoader(client=...)`, string interval
+names like ``"day"``) keep working unchanged.
 """
 
 from __future__ import annotations
@@ -18,14 +29,19 @@ from __future__ import annotations
 import os
 import time
 from collections import deque
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import certifi
+import pandas as pd
 import requests
 
+from ..data_loader import MarketDataLoader
+from .base import Candle, CandleInterval, Instrument, MarketDataProvider
+
 _BASE_URL = "https://invest-public-api.tinkoff.ru/rest"
-_CERTS_DIR = Path(__file__).parent / "certs"
+_CERTS_DIR = Path(__file__).parent.parent / "certs"
 _RU_CA_BUNDLE = _CERTS_DIR / "russian_trusted_ca.pem"
 
 
@@ -47,6 +63,12 @@ def _build_ca_bundle() -> str:
             out.write(b"\n")
             out.write(_RU_CA_BUNDLE.read_bytes())
     return str(combined_path)
+
+
+def _quotation_to_float(q: dict | None) -> float:
+    if not q:
+        return float("nan")
+    return int(q.get("units", 0)) + q.get("nano", 0) / 1e9
 
 
 class TInvestAPIError(RuntimeError):
@@ -158,3 +180,67 @@ class TInvestClient:
             if not page_token:
                 break
         return candles
+
+
+class TInvestProvider(MarketDataProvider):
+    """Adapts `TInvestClient` to the generic `MarketDataProvider` interface."""
+
+    # Per-resolution T-Invest API request-window limit (undocumented server-side
+    # cap on [from, to) span per GetCandles call - chunk_size values here are the
+    # ones known to work reliably, not published API constants).
+    _INTERVAL_MAP: dict[CandleInterval, tuple[str, timedelta]] = {
+        CandleInterval.MIN_1: ("CANDLE_INTERVAL_1_MIN", timedelta(days=1)),
+        CandleInterval.MIN_5: ("CANDLE_INTERVAL_5_MIN", timedelta(days=1)),
+        CandleInterval.MIN_15: ("CANDLE_INTERVAL_15_MIN", timedelta(days=1)),
+        CandleInterval.HOUR: ("CANDLE_INTERVAL_HOUR", timedelta(days=30)),
+        CandleInterval.DAY: ("CANDLE_INTERVAL_DAY", timedelta(days=365)),
+    }
+
+    def __init__(self, client: TInvestClient | None = None):
+        self._client = client or TInvestClient()
+
+    def resolve_instrument(self, ticker: str) -> Instrument:
+        raw = self._client.find_share_by_ticker(ticker)
+        return Instrument(id=raw["uid"], ticker=ticker, raw=raw)
+
+    def fetch_candles(
+        self, instrument_id: str, start: datetime, end: datetime, interval: CandleInterval
+    ) -> list[Candle]:
+        api_interval, _ = self._INTERVAL_MAP[interval]
+        raw_candles = self._client.get_candles(
+            instrument_id,
+            start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            api_interval,
+        )
+        return [self._to_candle(c) for c in raw_candles]
+
+    def max_chunk_size(self, interval: CandleInterval) -> timedelta:
+        return self._INTERVAL_MAP[interval][1]
+
+    def recent_latencies_ms(self) -> list[float]:
+        return self._client.recent_latencies_ms()
+
+    @staticmethod
+    def _to_candle(raw: dict) -> Candle:
+        return Candle(
+            time=pd.Timestamp(raw["time"]),
+            open=_quotation_to_float(raw.get("open")),
+            high=_quotation_to_float(raw.get("high")),
+            low=_quotation_to_float(raw.get("low")),
+            close=_quotation_to_float(raw.get("close")),
+            volume=float(raw.get("volume", 0)),
+        )
+
+
+class TInvestDataLoader(MarketDataLoader):
+    """
+    T-Invest-bound convenience `MarketDataLoader`: wires up `TInvestProvider`
+    (and, transitively, `TInvestClient`) automatically so existing call
+    sites can keep constructing a loader with just an optional pre-built
+    `TInvestClient`, exactly as before this module existed.
+    """
+
+    def __init__(self, client: TInvestClient | None = None, cache_dir: str | Path = "data/cache"):
+        self._client = client or TInvestClient()
+        super().__init__(TInvestProvider(self._client), cache_dir)

@@ -53,6 +53,28 @@ df = loader.load_candles(
 
 The result is cached in `data/cache/*.parquet` - repeating a call with the same parameters does not hit the network. `loader.load_many(["SBER", "GAZP"], start, end)` returns `dict[ticker, DataFrame]` - needed for multi-asset algorithms.
 
+### Data providers
+
+`TInvestDataLoader` is a thin, provider-specific convenience wrapper. The actual caching/chunking logic lives in `core.data_loader.MarketDataLoader`, which is written entirely against the `MarketDataProvider` interface (`core/providers/base.py`) and has no knowledge of T-Invest or any other specific broker/exchange API:
+
+```python
+from core.providers.base import MarketDataProvider, Instrument, Candle, CandleInterval
+
+class MyBrokerProvider(MarketDataProvider):
+    def resolve_instrument(self, ticker: str) -> Instrument: ...
+    def fetch_candles(self, instrument_id: str, start, end, interval: CandleInterval) -> list[Candle]: ...
+    # optional: max_chunk_size(interval), recent_latencies_ms()
+```
+
+```python
+from core.data_loader import MarketDataLoader
+
+loader = MarketDataLoader(MyBrokerProvider())
+df = loader.load_candles("SBER", start, end, interval="day")  # same API as TInvestDataLoader
+```
+
+`core/providers/tinvest.py` is the T-Invest implementation, built on top of that interface: `TInvestClient` (raw REST client), `TInvestProvider` (adapts it to `MarketDataProvider`), and `TInvestDataLoader` (a `MarketDataLoader` subclass that wires up `TInvestProvider` automatically - what the example above uses). To plug in a different data source, write one new `MarketDataProvider` subclass; `MarketDataLoader` and every algorithm/backtester/simulator downstream stay unchanged.
+
 ## 3. The unified algorithm interface
 
 All algorithms inherit from `core.base.BaseTradingAlgorithm` via one of two convenience base classes:
@@ -241,8 +263,10 @@ alogs4trade/
   src/
     core/
       base.py        # BaseTradingAlgorithm, SingleAssetAlgorithm, MultiAssetAlgorithm
-      tinvest_client.py        # REST client for the T-Invest API (now also tracks real call latency)
-      data_loader.py        # TInvestDataLoader (cache in data/cache/*.parquet; load_recent() for live/dynamic pulls)
+      data_loader.py        # MarketDataLoader - provider-agnostic (cache in data/cache/*.parquet; load_recent() for live/dynamic pulls)
+      providers/
+        base.py        # MarketDataProvider interface + Instrument/Candle/CandleInterval
+        tinvest.py        # TInvestClient (REST, tracks real call latency), TInvestProvider, TInvestDataLoader
       features.py        # shared feature engineering (make_features etc.)
       trading_env.py        # environment for RL algorithms (PPO/SAC/DDPG)
       metrics.py        # sharpe/max_drawdown/win_rate/hit_rate/pnl_rub
@@ -266,7 +290,29 @@ alogs4trade/
     market_simulation.md
 ```
 
-## 8. How to add your own algorithm
+## 8. How to add your own data provider
+
+Every algorithm/backtester/simulator in this repo consumes `core.data_loader.MarketDataLoader`, never a broker API directly - so plugging in a new market-data source (a different broker's REST API, an exchange's own API, a local database, ...) requires writing one new class and nothing else.
+
+1. Create `src/core/providers/my_broker.py` (or anywhere importable - there is nothing special about the `providers/` package itself, it just groups the ones already provided).
+2. Inherit from `MarketDataProvider` (`core/providers/base.py`) and implement its two required methods:
+   - `resolve_instrument(ticker: str) -> Instrument` - look up a ticker symbol and return its identity in your API (the `id` field is whatever you'll pass back into `fetch_candles`).
+   - `fetch_candles(instrument_id: str, start: datetime, end: datetime, interval: CandleInterval) -> list[Candle]` - a single page/window of OHLCV candles for that instrument. Map your API's own candle format to the generic `Candle` dataclass here (this is the only place that translation needs to happen).
+3. Optionally override:
+   - `max_chunk_size(interval) -> timedelta` if your API caps how long a `[start, end)` window can be per request (`MarketDataLoader` splits any longer request into chunks of this size automatically) - the default is a permissive decade, i.e. effectively unchunked.
+   - `recent_latencies_ms() -> list[float]` if you want `core.market_simulator.LatencyTracker` to calibrate its simulated demo-mode delay from your provider's own real measured round-trip time instead of a documented fallback constant.
+4. Use it exactly like `TInvestDataLoader`:
+   ```python
+   from core.data_loader import MarketDataLoader
+   from core.providers.my_broker import MyBrokerProvider
+
+   loader = MarketDataLoader(MyBrokerProvider())
+   df = loader.load_candles("SBER", start, end, interval="day")
+   ```
+   Nothing downstream (algorithms, `Backtester`, `BenchmarkRunner`, `MarketSimulator`) needs to know or care which provider produced `df` - they all consume the same `DataFrame`/`dict[ticker, DataFrame]` shape regardless.
+5. If you want a convenience wrapper matching `TInvestDataLoader`'s pattern (a `MarketDataLoader` subclass that wires up your provider automatically so callers don't need to import and construct it themselves), add a small subclass the same way `core/providers/tinvest.py` does for `TInvestDataLoader` - this is optional, `MarketDataLoader(MyBrokerProvider())` alone is a complete, working data source.
+
+## 9. How to add your own algorithm
 
 1. Create `src/algorithms/my_algo.py`.
 2. Inherit from `SingleAssetAlgorithm` or `MultiAssetAlgorithm`.
@@ -275,11 +321,11 @@ alogs4trade/
 5. Implement `fit()` and `generate_signals()` without look-ahead.
 6. Register it in `scripts/run_benchmarks.py` via `runner.register(...)` (required for it to be included in the main run and in `results/benchmark_results.*`). Registering it separately for `run_all_benchmarks.py`/`run_market_simulation.py` is not necessary - both find the new class automatically on the next launch, as long as the constructor does not require mandatory arguments (see "Running absolutely every algorithm" above).
 
-## 9. Limitations (important to understand before using with real money)
+## 10. Limitations (important to understand before using with real money)
 
 This is a research project, not a production-ready trading system: no slippage beyond fixed bps, no accounting for liquidity or order limits, no portfolio risk management, no live *execution* through T-Invest (only read-only access to market data is used - `T_INVEST_TOKEN` never places an order anywhere in this repo, including in the live market simulator, which is paper trading against a `SimulatedBroker`, not a real account). The metrics in `results/benchmark_results.md` are out-of-sample on a single chronological split of a single set of MOEX stocks, and are no substitute for full walk-forward validation; money P&L figures (`pnl_rub`) are notional, computed from a configurable default starting capital of 1,000,000 ₽, not a claim about what any real account would have made. The news-sentiment monitor (section 4) additionally has no historical RSS archive to validate against, and its LLM-generated `reasoning`/`direction` is a model opinion, not a verified fact - cross-check against official disclosure (e.g. e-disclosure.ru) before acting on it.
 
-## 10. Why this project was created
+## 11. Why this project was created
 
 This project is part of my work on researching various algorithms for trading on the stock market.
 
@@ -287,7 +333,7 @@ After fully implementing the methods, tests and core components, I thought my im
 
 There may be errors in the code; please report them in `pull requests`.
 
-## 11. AI Usage
+## 12. AI Usage
 
 AI is used in this project to verify the correctness of certain algorithm implementations and to produce initial translations of in-code comments into English. The model used is Claude Sonnet 5.
 #### Requirements for AI-Assisted Code

@@ -68,9 +68,8 @@ from sklearn.exceptions import ConvergenceWarning
 
 from .base import AlgorithmCategory, BaseTradingAlgorithm, InputMode
 from .benchmark_runner import BenchmarkRunner
-from .data_loader import TInvestDataLoader
 from .metrics import BacktestMetrics, compute_hit_rate, compute_metrics
-from .tinvest_client import TInvestClient
+from .providers.tinvest import TInvestClient, TInvestDataLoader
 
 # A live/demo session fits 30+ algorithms back to back; per-fit convergence
 # notices (sklearn's GaussianProcessRegressor, hmmlearn's GaussianHMM, ...)

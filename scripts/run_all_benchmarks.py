@@ -92,7 +92,7 @@ progress in real time.
 def _run_worker(modname: str, clsname: str) -> None:
     from core.backtester import Backtester
     from core.base import InputMode
-    from core.data_loader import TInvestDataLoader
+    from core.providers.tinvest import TInvestDataLoader
 
     module = importlib.import_module(f"algorithms.{modname}")
     cls = getattr(module, clsname)

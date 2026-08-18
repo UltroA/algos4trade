@@ -35,6 +35,7 @@ class RandomForestBaseline(SingleAssetAlgorithm):
         max_depth: int = 6,
         min_samples_leaf: int = 10,
         signal_strength: float = 4.0,
+        seed: int = 0,
         **kwargs,
     ):
         super().__init__(
@@ -43,6 +44,7 @@ class RandomForestBaseline(SingleAssetAlgorithm):
             max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             signal_strength=signal_strength,
+            seed=seed,
             **kwargs,
         )
         self.horizon = horizon
@@ -53,7 +55,8 @@ class RandomForestBaseline(SingleAssetAlgorithm):
             max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             n_jobs=-1,
-            **{k: v for k, v in kwargs.items() if k not in {"horizon", "n_estimators", "max_depth", "min_samples_leaf", "signal_strength"}},
+            random_state=seed,
+            **{k: v for k, v in kwargs.items() if k not in {"horizon", "n_estimators", "max_depth", "min_samples_leaf", "signal_strength", "seed"}},
         )
 
     def fit(self, train_data: pd.DataFrame) -> "RandomForestBaseline":

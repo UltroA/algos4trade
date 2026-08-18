@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.data_loader import TInvestDataLoader
+from core.providers.tinvest import TInvestDataLoader
 from moex_universe import TICKERS_100
 
 START = datetime(2019, 1, 1, tzinfo=timezone.utc)

@@ -44,7 +44,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from core.backtester import Backtester
-from core.data_loader import TInvestDataLoader
+from core.providers.tinvest import TInvestDataLoader
 
 from algorithms.vae import VAEFactorModel
 from algorithms.nbeats import NBEATSForecaster

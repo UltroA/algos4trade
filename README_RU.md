@@ -53,6 +53,28 @@ df = loader.load_candles(
 
 Результат кэшируется в `data/cache/*.parquet` - повторный вызов с теми же параметрами не бьёт по сети. `loader.load_many(["SBER", "GAZP"], start, end)` возвращает `dict[ticker, DataFrame]` - нужно для мульти-активных алгоритмов.
 
+### Провайдеры данных
+
+`TInvestDataLoader` - это тонкая, специфичная для T-Invest обёртка-удобство. Вся логика кэширования/разбиения на чанки живёт в `core.data_loader.MarketDataLoader`, который написан полностью против интерфейса `MarketDataProvider` (`core/providers/base.py`) и ничего не знает ни о T-Invest, ни о какой-либо другой конкретной брокерской/биржевой API:
+
+```python
+from core.providers.base import MarketDataProvider, Instrument, Candle, CandleInterval
+
+class MyBrokerProvider(MarketDataProvider):
+    def resolve_instrument(self, ticker: str) -> Instrument: ...
+    def fetch_candles(self, instrument_id: str, start, end, interval: CandleInterval) -> list[Candle]: ...
+    # опционально: max_chunk_size(interval), recent_latencies_ms()
+```
+
+```python
+from core.data_loader import MarketDataLoader
+
+loader = MarketDataLoader(MyBrokerProvider())
+df = loader.load_candles("SBER", start, end, interval="day")  # тот же API, что и у TInvestDataLoader
+```
+
+`core/providers/tinvest.py` - это реализация для T-Invest поверх этого интерфейса: `TInvestClient` (сырой REST-клиент), `TInvestProvider` (адаптирует его под `MarketDataProvider`) и `TInvestDataLoader` (подкласс `MarketDataLoader`, который автоматически связывает его с `TInvestProvider` - именно его использует пример выше). Чтобы подключить другой источник данных, достаточно написать один новый подкласс `MarketDataProvider`; `MarketDataLoader` и весь нижестоящий код алгоритмов/бэктестера/симулятора менять не нужно.
+
 ## 3. Единый интерфейс алгоритма
 
 Все алгоритмы наследуют `core.base.BaseTradingAlgorithm` через один из двух удобных базовых классов:
@@ -241,8 +263,10 @@ alogs4trade/
   src/
     core/
       base.py        # BaseTradingAlgorithm, SingleAssetAlgorithm, MultiAssetAlgorithm
-      tinvest_client.py        # REST-клиент T-Invest API (теперь также фиксирует реальную задержку вызовов)
-      data_loader.py        # TInvestDataLoader (кэш в data/cache/*.parquet; load_recent() для live/динамических загрузок)
+      data_loader.py        # MarketDataLoader - не зависит от конкретного провайдера (кэш в data/cache/*.parquet; load_recent() для live/динамических загрузок)
+      providers/
+        base.py        # интерфейс MarketDataProvider + Instrument/Candle/CandleInterval
+        tinvest.py        # TInvestClient (REST, фиксирует реальную задержку вызовов), TInvestProvider, TInvestDataLoader
       features.py        # общая инженерия признаков (make_features и т.д.)
       trading_env.py        # окружение для RL-алгоритмов (PPO/SAC/DDPG)
       metrics.py        # sharpe/max_drawdown/win_rate/hit_rate/pnl_rub
@@ -266,7 +290,29 @@ alogs4trade/
     market_simulation.md
 ```
 
-## 8. Как добавить свой алгоритм
+## 8. Как добавить свой провайдер данных
+
+Каждый алгоритм/бэктестер/симулятор в этом репозитории использует `core.data_loader.MarketDataLoader`, а не брокерскую API напрямую - поэтому подключение нового источника рыночных данных (REST API другого брокера, API самой биржи, локальная база данных, ...) требует написать один новый класс и больше ничего.
+
+1. Создать `src/core/providers/my_broker.py` (или в любом другом импортируемом месте - в самом пакете `providers/` нет ничего особенного, он просто группирует уже готовые реализации).
+2. Отнаследоваться от `MarketDataProvider` (`core/providers/base.py`) и реализовать два обязательных метода:
+   - `resolve_instrument(ticker: str) -> Instrument` - найти тикер и вернуть его идентичность в вашей API (поле `id` - это то, что затем будет передано обратно в `fetch_candles`).
+   - `fetch_candles(instrument_id: str, start: datetime, end: datetime, interval: CandleInterval) -> list[Candle]` - одна страница/окно OHLCV-свечей для этого инструмента. Здесь формат свечей вашей API преобразуется в универсальный датакласс `Candle` - это единственное место, где нужно такое преобразование.
+3. Опционально переопределить:
+   - `max_chunk_size(interval) -> timedelta`, если ваша API ограничивает длину окна `[start, end)` за один запрос (`MarketDataLoader` автоматически разбивает более длинный запрос на чанки этого размера) - по умолчанию это разрешающее значение в десять лет, т.е. фактически без разбиения.
+   - `recent_latencies_ms() -> list[float]`, если вы хотите, чтобы `core.market_simulator.LatencyTracker` калибровал синтетическую задержку демо-режима по реальной измеренной задержке вашего провайдера, а не по документированной запасной константе.
+4. Использовать его точно так же, как `TInvestDataLoader`:
+   ```python
+   from core.data_loader import MarketDataLoader
+   from core.providers.my_broker import MyBrokerProvider
+
+   loader = MarketDataLoader(MyBrokerProvider())
+   df = loader.load_candles("SBER", start, end, interval="day")
+   ```
+   Нижестоящему коду (алгоритмам, `Backtester`, `BenchmarkRunner`, `MarketSimulator`) не важно, какой провайдер сформировал `df` - все они работают с одной и той же формой `DataFrame`/`dict[ticker, DataFrame]` независимо от источника.
+5. Если нужна обёртка-удобство по образцу `TInvestDataLoader` (подкласс `MarketDataLoader`, автоматически связывающий его с вашим провайдером, чтобы вызывающему коду не нужно было импортировать и создавать провайдер вручную) - добавьте небольшой подкласс так же, как это делает `core/providers/tinvest.py` для `TInvestDataLoader`. Это необязательно: `MarketDataLoader(MyBrokerProvider())` сам по себе уже полностью рабочий источник данных.
+
+## 9. Как добавить свой алгоритм
 
 1. Создать `src/algorithms/my_algo.py`.
 2. Отнаследоваться от `SingleAssetAlgorithm` или `MultiAssetAlgorithm`.
@@ -275,11 +321,11 @@ alogs4trade/
 5. Реализовать `fit()` и `generate_signals()` без заглядывания в будущее.
 6. Зарегистрировать в `scripts/run_benchmarks.py` через `runner.register(...)` (нужно для попадания в основной прогон и в `results/benchmark_results.*`). Регистрировать отдельно для `run_all_benchmarks.py`/`run_market_simulation.py` не нужно - оба находят новый класс автоматически при следующем запуске, если конструктор не требует обязательных аргументов (см. "Прогон вообще всех алгоритмов" выше).
 
-## 9. Ограничения (важно понимать перед использованием на реальных деньгах)
+## 10. Ограничения (важно понимать перед использованием на реальных деньгах)
 
 Это исследовательский проект, а не production-ready торговая система: без учёта проскальзывания сверх фиксированных бп, без учёта ликвидности/лимитов заявок, без риск-менеджмента портфеля, без реального *исполнения* через T-Invest (используется только read-only доступ к рыночным данным - `T_INVEST_TOKEN` нигде в этом репозитории, включая живой симулятор рынка, не выставляет заявки; симулятор ведёт бумажную торговлю через `SimulatedBroker`, а не реальный счёт). Метрики в `results/benchmark_results.md` - out-of-sample на одном хронологическом сплите одного набора акций MOEX, не заменяют полноценную walk-forward валидацию; денежные показатели P&L (`pnl_rub`) условны и считаются от настраиваемого стартового капитала по умолчанию в 1 000 000 ₽, а не являются утверждением о том, что заработал бы реальный счёт. У мониторинга новостей (раздел 4) дополнительно нет исторического RSS-архива для проверки, а его LLM-генерируемые `reasoning`/`direction` - это мнение модели, а не проверенный факт: сверяйтесь с официальным раскрытием (например, e-disclosure.ru), прежде чем действовать на его основе.
 
-## 10. Зачем этот проект создан
+## 11. Зачем этот проект создан
 
 Данный проект является частью моей работы по исследованию различных алгоритмов для торгов на фондовом рынке.
 
@@ -287,7 +333,7 @@ alogs4trade/
 
 В коде могут быть ошибки, просьба указывать их в `pull requests`.
 
-## 11. Использование ИИ
+## 12. Использование ИИ
 
 В проекте ИИ применяется для верификации корректности реализации отдельных алгоритмов, а также для первичного перевода комментариев в коде на английский язык. Используемая модель — Claude Sonnet 5.
 #### Требования к коду, созданному с помощью ИИ

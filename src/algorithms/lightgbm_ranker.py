@@ -36,6 +36,7 @@ class LightGBMRanker(SingleAssetAlgorithm):
         max_depth: int = 4,
         learning_rate: float = 0.05,
         signal_strength: float = 4.0,
+        seed: int = 0,
         **kwargs,
     ):
         super().__init__(
@@ -44,6 +45,7 @@ class LightGBMRanker(SingleAssetAlgorithm):
             max_depth=max_depth,
             learning_rate=learning_rate,
             signal_strength=signal_strength,
+            seed=seed,
             **kwargs,
         )
         self.horizon = horizon
@@ -56,7 +58,8 @@ class LightGBMRanker(SingleAssetAlgorithm):
             colsample_bytree=0.8,
             min_child_samples=20,
             verbosity=-1,
-            **{k: v for k, v in kwargs.items() if k not in {"horizon", "n_estimators", "max_depth", "learning_rate", "signal_strength"}},
+            random_state=seed,
+            **{k: v for k, v in kwargs.items() if k not in {"horizon", "n_estimators", "max_depth", "learning_rate", "signal_strength", "seed"}},
         )
 
     def fit(self, train_data: pd.DataFrame) -> "LightGBMRanker":

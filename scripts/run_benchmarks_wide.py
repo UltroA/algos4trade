@@ -46,7 +46,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from core.backtester import Backtester
-from core.data_loader import TInvestDataLoader
+from core.providers.tinvest import TInvestDataLoader
 
 from algorithms.lightgbm_ranker import LightGBMRanker
 from algorithms.xgboost_ranker import XGBoostRanker
