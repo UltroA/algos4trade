@@ -1,15 +1,14 @@
 """
-HMM (hidden Markov model) - market regime detection.
+Hidden Markov Model - market regime detection.
 
-a Gaussian HMM with 3 hidden states tries to split the market
-into stable regimes (uptrend / flat / stress) based on returns and
-volatility. Realistic level - on average 2-4 stable regimes can be
-distinguished; main weakness (see table) - regimes are redefined
-retroactively: Viterbi decoding applied to an already-completed segment is
-not equivalent to real-time online detection. Here, for backtest simplicity,
-`model.predict()` is called on the entire test window at once (see
-generate_signals) - this is an optimistic assumption; in production a
-rolling online decoding would be more appropriate.
+A Gaussian HMM with three hidden states classifies returns and volatility
+into regimes (uptrend / flat / drawdown) and trades accordingly. Typically
+resolves two to four distinguishable regimes.
+
+Limitation: Viterbi decoding runs over the entire test window at once (see
+generate_signals), not bar-by-bar online - the regime assigned to an early
+bar can be informed by later bars in the same window. Production use would
+require rolling online decoding instead.
 """
 
 from __future__ import annotations
@@ -55,8 +54,7 @@ class HMMRegimeDetector(SingleAssetAlgorithm):
         X = feat.to_numpy()
         self.model.fit(X)
 
-        # Determine the "bull" (highest mean return) and "bear/stress"
-        # (lowest mean return) regimes from the fitted model's means_.
+        # Bull state = highest mean return, bear state = lowest mean return.
         mean_returns = self.model.means_[:, 0]
         self._bull_state = int(np.argmax(mean_returns))
         self._bear_state = int(np.argmin(mean_returns))
@@ -82,7 +80,7 @@ class HMMRegimeDetector(SingleAssetAlgorithm):
 if __name__ == "__main__":
     rng = np.random.default_rng(0)
     n = 500
-    # Synthetic data with regime switching: uptrend, flat, stress drawdown.
+    # Synthetic data with regime transitions: uptrend, flat, drawdown.
     regimes = np.random.default_rng(1).choice([0, 1, 2], size=n, p=[0.4, 0.4, 0.2])
     drift_by_regime = {0: 0.002, 1: 0.0, 2: -0.004}
     vol_by_regime = {0: 0.008, 1: 0.006, 2: 0.02}

@@ -1,7 +1,7 @@
 """
 SAC (Soft Actor-Critic) - RL for optimizing position size.
 
-unlike PPO (on-policy), SAC is an off-policy algorithm with a replay buffer and maximizes reward + policy
+Unlike PPO (on-policy), SAC is an off-policy algorithm with a replay buffer and maximizes reward + policy
 entropy (better exploration of the action space, typically higher
 sample efficiency). Just like PPO/DDPG in this project, the risk of overfitting
 to the specific backtest is not eliminated (see the table: "signal generation

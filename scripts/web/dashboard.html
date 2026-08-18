@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOEX Simulator — панель управления</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23291E24'/%3E%3Cpath d='M6 20l5-7 5 4 5-9 5 5' stroke='%2386A88E' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    /* -- brand palette: #291E24 / #412B42 / #86A88E / #754A70 (fixed brand hexes,
+       everything else derived + validated for WCAG text contrast against --bg) -- */
+    --bg: #291E24; --bg-2: #1f171b;
+    --panel: #33242c; --panel-2: #412b42; --panel-3: #5c425a;
+    --border: #5a4058; --border-soft: #3a2a38;
+    --text: #f4eef2; --text-dim: #c9b8c6; --muted: #a48d9e;
+    --accent: #754a70; --accent-2: #b98cb4; --accent-soft: rgba(117,74,112,.24);
+    --good: #86a88e; --good-soft: rgba(134,168,142,.16);
+    --bad: #d9667a; --bad-strong: #b84d62; --bad-soft: rgba(217,102,122,.16);
+    --warn: #d9a55b; --warn-soft: rgba(217,165,91,.16);
+    --radius-lg: 16px; --radius-md: 10px; --radius-sm: 7px;
+    --shadow-card: 0 1px 2px rgba(10,4,8,.35), 0 10px 28px -14px rgba(10,4,8,.6);
+    --ease: cubic-bezier(.2,.7,.3,1);
+    --sidebar-w: 232px;
+  }
+  * { box-sizing: border-box; }
+  ::selection { background: var(--accent-soft); color: var(--text); }
+  html { color-scheme: dark; scroll-behavior: smooth; }
+  body {
+    margin: 0; color: var(--text);
+    background:
+      radial-gradient(900px 560px at 6% -10%, rgba(117,74,112,.22), transparent 60%),
+      radial-gradient(760px 480px at 100% -6%, rgba(134,168,142,.15), transparent 55%),
+      radial-gradient(680px 460px at 55% 115%, rgba(217,165,91,.10), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "tnum" 1, "cv11" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--panel-3); border-radius: 8px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: #6e4c6a; }
+
+  svg.icon { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ============ app shell: sidebar + main ============ */
+  .app-shell { display: flex; align-items: stretch; min-height: 100vh; }
+
+  .sidebar {
+    width: var(--sidebar-w); flex: none; position: sticky; top: 0; align-self: flex-start; height: 100vh;
+    display: flex; flex-direction: column; gap: 22px; padding: 22px 15px;
+    background: linear-gradient(180deg, var(--panel), var(--bg-2) 85%);
+    border-right: 1px solid var(--border-soft);
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 10px; flex: none; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent), var(--good));
+    box-shadow: var(--shadow-card);
+  }
+  .brand-mark svg { width: 18px; height: 18px; }
+  .brand-name { font-size: 13.5px; font-weight: 700; letter-spacing: -.01em; color: var(--text); }
+  .brand-tag { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+
+  .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-link {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--radius-sm);
+    font-size: 12.5px; font-weight: 600; color: var(--text-dim); text-decoration: none;
+    transition: background .15s var(--ease), color .15s var(--ease);
+  }
+  .nav-link svg { color: var(--nav-accent, var(--muted)); opacity: .7; transition: opacity .15s var(--ease); }
+  .nav-link:hover { background: var(--panel-2); color: var(--text); }
+  .nav-link:hover svg { opacity: 1; }
+  .nav-link.active { background: color-mix(in srgb, var(--nav-accent, var(--accent-2)) 18%, transparent); color: var(--nav-accent, var(--accent-2)); }
+  .nav-link.active svg { opacity: 1; color: var(--nav-accent, var(--accent-2)); }
+
+  .sidebar-foot { font-size: 10.5px; line-height: 1.5; color: var(--muted); padding: 12px 6px 2px; border-top: 1px solid var(--border-soft); }
+  .sidebar-foot code { color: var(--text-dim); }
+
+  .main { flex: 1; min-width: 0; }
+  .topbar {
+    position: sticky; top: 0; z-index: 6; display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 15px 30px; background: rgba(41,30,36,.86); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .topbar-title h1 { font-size: 15.5px; margin: 0; font-weight: 700; color: var(--text); letter-spacing: -.005em; }
+  .topbar-title .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .topbar-right { display: flex; align-items: center; gap: 13px; }
+  .last-updated { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  .content { max-width: 1180px; margin: 0 auto; padding: 24px 30px 80px; }
+  .section { scroll-margin-top: 76px; }
+  .section + .section { margin-top: 4px; }
+  .section-lead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 26px 0 12px; }
+  .section-lead:first-child { margin-top: 0; }
+  .section-lead h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+
+  @media (max-width: 960px) {
+    .app-shell { flex-direction: column; }
+    .sidebar { position: relative; width: 100%; height: auto; flex-direction: row; align-items: center; padding: 13px 16px; gap: 14px; }
+    .sidebar-nav { flex-direction: row; overflow-x: auto; gap: 3px; }
+    .nav-link { white-space: nowrap; }
+    .sidebar-foot, .brand-tag { display: none; }
+    .topbar { padding: 13px 18px; }
+    .content { padding: 20px 18px 70px; }
+  }
+
+  /* ============ badge ============ */
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px 6px 11px;
+    border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--panel-2);
+    border: 1px solid var(--border); color: var(--text-dim);
+    box-shadow: var(--shadow-card); transition: color .2s var(--ease), border-color .2s var(--ease);
+    white-space: nowrap;
+  }
+  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+  .badge.running { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--border)); background: var(--good-soft); }
+  .badge.running::before { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); animation: pulse 1.6s ease-in-out infinite; }
+  .badge.idle::before { background: var(--muted); }
+  .badge.error { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
+  .badge.error::before { background: var(--bad); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 var(--good-soft); } 50% { box-shadow: 0 0 0 4px transparent; } }
+  @media (prefers-reduced-motion: reduce) { .badge.running::before { animation: none; } }
+
+  /* ============ layout helpers ============ */
+  .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; margin-bottom: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    position: relative; z-index: 0; overflow: hidden;
+    background: linear-gradient(165deg, color-mix(in srgb, var(--card-accent, var(--accent-2)) 8%, var(--panel)), var(--panel) 55%, var(--bg-2));
+    border: 1px solid var(--border-soft); border-radius: var(--radius-lg);
+    padding: 20px 22px; margin-bottom: 16px; box-shadow: var(--shadow-card);
+  }
+  .card::before {
+    content: ""; position: absolute; z-index: -1; top: -70px; right: -70px; width: 220px; height: 220px; pointer-events: none;
+    background: radial-gradient(circle, var(--card-accent, var(--accent-2)), transparent 70%); opacity: .18; filter: blur(2px);
+  }
+  h2 {
+    font-size: 14px; margin: 0 0 16px; font-weight: 600; color: var(--text);
+    display: flex; align-items: center; gap: 10px; letter-spacing: -.005em;
+  }
+  h2::before { content: ""; width: 3px; height: 15px; border-radius: 2px; background: var(--card-accent, var(--accent-2)); flex: none; }
+  .card-icon {
+    width: 26px; height: 26px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--card-accent, var(--accent-2)) 22%, transparent); color: var(--card-accent, var(--accent-2));
+  }
+  .card-icon svg { width: 14px; height: 14px; }
+  h2 .h2-tail { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+  input[type=text], input[type=number], input[type=time], select, textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; font-family: inherit;
+    transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
+  }
+  input[type=text]::placeholder, input[type=number]::placeholder { color: #8a7488; }
+  input:hover, select:hover { border-color: var(--accent-2); }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent-2); background: var(--panel-3);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+  .field { margin-bottom: 13px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  @media (max-width: 560px) { .row2, .row3 { grid-template-columns: 1fr; } }
+
+  .days { display: flex; gap: 6px; flex-wrap: wrap; }
+  .daychip {
+    display: flex; align-items: center; gap: 5px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--text-dim);
+    transition: background .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+  }
+  .daychip:hover { border-color: var(--accent-2); color: var(--text); }
+  .daychip:has(input:checked) { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent-2) 50%, var(--border)); color: var(--text); }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .hint a { color: var(--accent-2); text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+
+  button {
+    background: linear-gradient(180deg, var(--accent), #5a3a56); color: #fff; border: none;
+    border-radius: var(--radius-sm); padding: 9px 17px; font-size: 13px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 6px 16px -8px rgba(117,74,112,.7);
+    transition: transform .12s var(--ease), box-shadow .12s var(--ease), filter .12s var(--ease);
+  }
+  button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+  button:active:not(:disabled) { transform: translateY(0); filter: brightness(.97); }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); box-shadow: none; }
+  button.secondary:hover:not(:disabled) { background: var(--panel-3); border-color: var(--accent-2); filter: none; }
+  button.danger { background: linear-gradient(180deg, var(--bad-strong), #8f3a4a); box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 6px 16px -8px rgba(184,77,98,.7); }
+  button:disabled { opacity: .4; cursor: not-allowed; transform: none; filter: none; }
+  .btnrow { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+  .msg { font-size: 12px; margin-top: 9px; min-height: 16px; transition: opacity .2s var(--ease); }
+  .msg.ok { color: var(--good); } .msg.err { color: var(--bad); }
+
+  .algo-list {
+    max-height: 260px; overflow-y: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-md);
+    padding: 8px; background: var(--panel-2);
+  }
+  .algo-group-title {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 12px 4px 5px; font-weight: 700;
+  }
+  .algo-group-title:first-child { margin-top: 4px; }
+  .algo-item {
+    display: flex; align-items: center; gap: 8px; padding: 5px 6px; font-size: 12.5px; color: var(--text-dim);
+    border-radius: 6px; cursor: pointer; transition: background .12s var(--ease);
+  }
+  .algo-item:hover { background: var(--panel-3); }
+  .algo-item:has(input:checked) { color: var(--text); }
+  .algo-item span.mod { color: var(--muted); font-size: 11px; }
+
+  /* ============ KPI stat cards ============ */
+  .gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .gauge {
+    position: relative; background: linear-gradient(160deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 13px 15px; overflow: hidden;
+  }
+  .gauge::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--gauge-c, var(--accent-2)); opacity: .9; }
+  .gauge:nth-child(1) { --gauge-c: var(--accent-2); }
+  .gauge:nth-child(2) { --gauge-c: var(--warn); }
+  .gauge:nth-child(3) { --gauge-c: var(--accent); }
+  .gauge:nth-child(4) { --gauge-c: var(--accent); }
+  .gauge:nth-child(5) { --gauge-c: var(--good); }
+  .gauge:nth-child(6) { --gauge-c: var(--good); }
+  .gauge-icon {
+    width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--gauge-c, var(--accent-2)) 20%, transparent); color: var(--gauge-c, var(--accent-2));
+    margin-bottom: 9px;
+  }
+  .gauge-icon svg { width: 13px; height: 13px; }
+  .gauge .val { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+  .gauge .lbl { font-size: 10.5px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: .04em; }
+
+  /* ============ table ============ */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius-md); }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th {
+    color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+    position: sticky; top: 0; background: var(--panel); box-shadow: 0 1px 0 var(--border-soft);
+  }
+  th.th-sort { cursor: pointer; user-select: none; transition: color .12s var(--ease); }
+  th.th-sort:hover { color: var(--text); }
+  th.th-sort .sort-arrow { display: inline-block; margin-left: 3px; font-size: 9px; opacity: .35; transition: opacity .12s var(--ease), color .12s var(--ease); }
+  th.th-sort.active { color: var(--accent-2); }
+  th.th-sort.active .sort-arrow { opacity: 1; color: var(--accent-2); }
+  tbody tr { transition: background .12s var(--ease); }
+  tbody tr:nth-child(even) { background: rgba(244,238,242,.035); }
+  tbody tr:hover { background: var(--panel-3); }
+  .load-bar {
+    display: inline-block; height: 6px; min-width: 2px; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2)); vertical-align: middle; margin-right: 7px;
+  }
+  .pos { color: var(--good); font-weight: 600; } .neg { color: var(--bad); font-weight: 600; }
+  .err-row { color: var(--bad); }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 8px; border-radius: 20px;
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  }
+  .status-pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
+  .status-pill.ok { color: var(--good); background: var(--good-soft); }
+  .status-pill.err { color: var(--bad); background: var(--bad-soft); }
+
+  pre#logTail {
+    background: var(--bg-2); border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 13px 14px;
+    max-height: 260px; overflow-y: auto; font: 11.5px/1.6 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--text-dim); white-space: pre-wrap; word-break: break-word;
+  }
+  .muted { color: var(--muted); }
+  .filter { margin-bottom: 9px; }
+
+  /* -- legend button / panel (per-card help disclosure) -- */
+  .legend-btn {
+    width: 20px; height: 20px; padding: 0; margin-left: auto; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 50%; font-size: 11px; font-weight: 700; line-height: 1; box-shadow: none;
+    opacity: .6; transition: opacity .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease), transform .12s var(--ease);
+  }
+  .legend-btn:hover { opacity: 1; color: var(--text); border-color: var(--accent-2); transform: translateY(-1px); filter: none; }
+  .legend-btn[aria-expanded="true"] { opacity: 1; color: var(--accent-2); border-color: var(--accent-2); background: var(--accent-soft); }
+  .legend-panel {
+    margin: -8px 0 16px; padding: 13px 16px; background: var(--panel-2); border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md); display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px 22px; animation: legendIn .15s var(--ease);
+  }
+  .legend-panel[hidden] { display: none; }
+  .legend-panel dt { font-size: 11.5px; font-weight: 700; color: var(--text); display: inline; }
+  .legend-panel dd { margin: 0; font-size: 11.5px; color: var(--text-dim); display: inline; }
+  .legend-panel dd::after { content: ""; display: block; }
+  @keyframes legendIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* -- top-5 P&L bar chart -- */
+  .legend-key { margin-left: auto; display: flex; align-items: center; font-size: 11px; font-weight: 500; color: var(--muted); text-transform: none; letter-spacing: 0; }
+  .key-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 5px 0 12px; flex: none; }
+  .key-dot:first-child { margin-left: 0; }
+  .key-dot.pos { background: var(--good); } .key-dot.neg { background: var(--bad); }
+  .bar-chart { display: flex; flex-direction: column; gap: 12px; }
+  .bar-row { display: grid; grid-template-columns: 168px 1fr 100px; align-items: center; gap: 12px; }
+  @media (max-width: 640px) { .bar-row { grid-template-columns: 96px 1fr 78px; gap: 8px; } }
+  .bar-rank { color: var(--muted); font-size: 11px; font-weight: 700; width: 14px; flex: none; }
+  .bar-name { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .bar-track { position: relative; height: 22px; display: grid; grid-template-columns: 1fr 1fr; }
+  .bar-track::before { content: ""; position: absolute; left: 50%; top: 1px; bottom: 1px; width: 1px; background: var(--border-soft); }
+  .bar-neg-cell, .bar-pos-cell { position: relative; height: 100%; display: flex; align-items: center; }
+  .bar-neg-cell { justify-content: flex-end; }
+  .bar-pos-cell { justify-content: flex-start; }
+  .bar-fill { height: 20px; min-width: 3px; transition: width .5s var(--ease); }
+  .bar-fill.pos { background: linear-gradient(90deg, #6c9575, var(--good)); border-radius: 0 4px 4px 0; }
+  .bar-fill.neg { background: linear-gradient(270deg, #8f3a4a, var(--bad)); border-radius: 4px 0 0 4px; }
+  .bar-value { font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .bar-value.pos { color: var(--good); } .bar-value.neg { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M3 17l5-7 5 4 5-9 3 3"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">MOEX Simulator</div>
+        <div class="brand-tag">панель управления</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <a class="nav-link" href="#sec-overview" data-section="sec-overview" style="--nav-accent: var(--accent-2)">
+        <svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Обзор
+      </a>
+      <a class="nav-link" href="#sec-config" data-section="sec-config" style="--nav-accent: var(--warn)">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        Конфигурация
+      </a>
+      <a class="nav-link" href="#sec-run" data-section="sec-run" style="--nav-accent: var(--good)">
+        <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Запуск
+      </a>
+      <a class="nav-link" href="#sec-feeds" data-section="sec-feeds" style="--nav-accent: var(--accent-2)">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+        Источники новостей
+      </a>
+      <a class="nav-link" href="#sec-table" data-section="sec-table" style="--nav-accent: var(--warn)">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Алгоритмы
+      </a>
+      <a class="nav-link" href="#sec-log" data-section="sec-log" style="--nav-accent: var(--bad)">
+        <svg class="icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Лог
+      </a>
+    </nav>
+    <div class="sidebar-foot">Локальный конфигуратор · <code>configs/market_simulator.json</code></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">
+        <h1>Живая симуляция торгов</h1>
+        <div class="sub">MOEX · configs/market_simulator.json</div>
+      </div>
+      <div class="topbar-right">
+        <span class="last-updated" id="lastUpdated">—</span>
+        <div id="statusBadge" class="badge idle">idle</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <section class="section" id="sec-overview">
+        <div class="card" style="--card-accent: var(--accent-2)">
+          <h2>
+            <span class="card-icon"><svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+            Текущая нагрузка процесса симуляции
+          </h2>
+          <div class="gauges">
+            <div class="gauge">
+              <div class="gauge-icon"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></div>
+              <div class="val" id="g_cpu">—</div><div class="lbl">CPU, %</div>
+            </div>
+            <div class="gauge">
+              <div class="gauge-icon"><svg class="icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+              <div class="val" id="g_rss">—</div><div class="lbl">RSS, MB</div>
+            </div>
+            <div class="gauge">
+              <div class="gauge-icon"><svg class="icon" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></div>
+              <div class="val" id="g_threads">—</div><div class="lbl">потоков</div>
+            </div>
+            <div class="gauge">
+              <div class="gauge-icon"><svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
+              <div class="val" id="g_children">—</div><div class="lbl">процессов (fit)</div>
+            </div>
+            <div class="gauge">
+              <div class="gauge-icon"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+              <div class="val" id="g_elapsed">—</div><div class="lbl">время сессии</div>
+            </div>
+            <div class="gauge">
+              <div class="gauge-icon"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+              <div class="val" id="g_ticks">—</div><div class="lbl">тиков</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="--card-accent: var(--good)">
+          <h2>
+            <span class="card-icon"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span>
+            Топ-5 самых прибыльных алгоритмов
+            <span class="legend-key"><span class="key-dot pos"></span>прибыль<span class="key-dot neg"></span>убыток</span>
+          </h2>
+          <div class="bar-chart" id="top5Chart">
+            <div class="muted">нет данных — запустите симуляцию</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-config">
+        <div class="section-lead"><h3>Настройка сессии</h3></div>
+        <div class="grid">
+          <div class="card" style="--card-accent: var(--warn)">
+            <h2>
+              <span class="card-icon"><svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></span>
+              Конфигурация сессии
+            </h2>
+            <form id="configForm">
+              <div class="field">
+                <label>Тикеры (через запятую)</label>
+                <input type="text" id="cf_tickers" placeholder="SBER,GAZP,LKOH,...">
+              </div>
+              <div class="row3">
+                <div class="field">
+                  <label>Интервал</label>
+                  <select id="cf_interval">
+                    <option value="1min">1min</option>
+                    <option value="5min">5min</option>
+                    <option value="15min">15min</option>
+                    <option value="hour">hour</option>
+                    <option value="day">day</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Капитал, ₽</label>
+                  <input type="number" id="cf_capital" step="1000">
+                </div>
+                <div class="field">
+                  <label>Комиссия, б.п.</label>
+                  <input type="number" id="cf_cost_bps" step="0.5">
+                </div>
+              </div>
+              <div class="row3">
+                <div class="field">
+                  <label>Начало сессии (МСК)</label>
+                  <input type="time" id="cf_session_start">
+                </div>
+                <div class="field">
+                  <label>Конец сессии (МСК)</label>
+                  <input type="time" id="cf_session_end">
+                </div>
+                <div class="field">
+                  <label>Warm-up, дней</label>
+                  <input type="number" id="cf_warmup_days" step="1" min="1">
+                </div>
+              </div>
+              <div class="field">
+                <label>Торговые дни</label>
+                <div class="days" id="cf_trading_days">
+                  <label class="daychip"><input type="checkbox" value="0">Пн</label>
+                  <label class="daychip"><input type="checkbox" value="1">Вт</label>
+                  <label class="daychip"><input type="checkbox" value="2">Ср</label>
+                  <label class="daychip"><input type="checkbox" value="3">Чт</label>
+                  <label class="daychip"><input type="checkbox" value="4">Пт</label>
+                  <label class="daychip"><input type="checkbox" value="5">Сб</label>
+                  <label class="daychip"><input type="checkbox" value="6">Вс</label>
+                </div>
+              </div>
+              <div class="row3">
+                <div class="field">
+                  <label>Опрос новых свечей, сек</label>
+                  <input type="number" id="cf_poll_interval" step="1" min="1">
+                </div>
+                <div class="field">
+                  <label>Макс. длительность, сек (пусто = до конца сессии)</label>
+                  <input type="number" id="cf_max_duration" step="60" min="0">
+                </div>
+                <div class="field">
+                  <label>Автосохранение каждые N тиков</label>
+                  <input type="number" id="cf_autosave" step="1" min="1">
+                </div>
+              </div>
+              <div class="row2">
+                <div class="field">
+                  <label>Скорость демо-тика, мс (пусто = из реальной latency)</label>
+                  <input type="number" id="cf_demo_speed" step="10" min="0">
+                </div>
+                <div class="field">
+                  <label>Basename результатов</label>
+                  <input type="text" id="cf_basename">
+                </div>
+              </div>
+              <div class="field">
+                <label class="daychip" style="width:fit-content"><input type="checkbox" id="cf_news_monitor"> Запускать монитор новостей (если есть news-sentiment алгоритм)</label>
+              </div>
+              <div class="btnrow">
+                <button type="submit">Сохранить конфиг</button>
+                <button type="button" class="secondary" id="btnReloadConfig">Обновить из файла</button>
+              </div>
+              <div class="msg" id="configMsg"></div>
+            </form>
+          </div>
+
+          <div class="card" id="sec-run" style="--card-accent: var(--good)">
+            <h2>
+              <span class="card-icon"><svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
+              Запуск симуляции
+            </h2>
+            <div class="row2">
+              <div class="field">
+                <label class="daychip" style="width:fit-content"><input type="checkbox" id="rn_demo"> Demo (ускоренный реплей, без ожидания торговых часов)</label>
+              </div>
+              <div class="field" id="rn_lookback_field" style="display:none">
+                <label>Реплей последних, дней</label>
+                <input type="number" id="rn_lookback" value="5" step="1" min="1">
+              </div>
+            </div>
+            <div class="row2" id="rn_speed_row" style="display:none">
+              <div class="field">
+                <label>Скорость тика, мс (пусто = реальная latency)</label>
+                <input type="number" id="rn_demo_speed" placeholder="из конфига" step="10" min="0">
+              </div>
+              <div class="field">
+                <label class="daychip" style="width:fit-content"><input type="checkbox" id="rn_demo_fastest"> Максимально быстро (без пауз между тиками)</label>
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label>Длительность сессии, сек (переопределяет конфиг)</label>
+                <input type="number" id="rn_duration" placeholder="из конфига">
+              </div>
+              <div class="field">
+                <label>Warm-up, дней (переопределяет конфиг)</label>
+                <input type="number" id="rn_warmup" placeholder="из конфига">
+              </div>
+            </div>
+            <div class="field">
+              <label>Basename результатов (переопределяет конфиг)</label>
+              <input type="text" id="rn_basename" placeholder="из конфига">
+            </div>
+
+            <div class="field">
+              <label>Алгоритмы (пусто = все обнаруженные)</label>
+              <input type="text" class="filter" id="algoFilter" placeholder="фильтр по имени/категории...">
+              <div class="algo-list" id="algoList">
+                <div class="muted">загрузка списка алгоритмов...</div>
+              </div>
+              <div class="hint"><span id="algoSelectedCount">0</span> выбрано &middot;
+                <a href="#" id="algoSelectAll">выбрать все</a> &middot;
+                <a href="#" id="algoSelectNone">снять всё</a>
+              </div>
+            </div>
+
+            <div class="btnrow">
+              <button type="button" id="btnStart">Запустить</button>
+              <button type="button" class="danger" id="btnStop" disabled>Остановить</button>
+            </div>
+            <div class="msg" id="runMsg"></div>
+          </div>
+
+          <div class="card" id="sec-feeds" style="--card-accent: var(--accent-2)">
+            <h2>
+              <span class="card-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg></span>
+              Источники новостей (RSS)
+            </h2>
+            <div class="field">
+              <div class="algo-list" id="feedList">
+                <div class="muted">загрузка списка источников...</div>
+              </div>
+              <div class="hint">Переключается сразу, без перезапуска монитора новостей — берётся в расчёт на следующем опросе (scripts/run_news_monitor.py, --interval).</div>
+            </div>
+            <div class="msg" id="feedMsg"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-table">
+        <div class="section-lead"><h3>Аналитика</h3></div>
+        <div class="card" style="--card-accent: var(--warn)">
+          <h2>
+            <span class="card-icon"><svg class="icon" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+            Потребление по каждому алгоритму (реально измеренные CPU-время и RSS)
+            <span class="h2-tail">
+              <button type="button" class="legend-btn" id="btnLegend" aria-expanded="false" aria-controls="tableLegend" title="Легенда таблицы">?</button>
+            </span>
+          </h2>
+          <dl class="legend-panel" id="tableLegend" hidden>
+            <div><dt>алгоритм</dt> <dd>— название стратегии и её модуль в src/algorithms/.</dd></div>
+            <div><dt>категория</dt> <dd>— класс алгоритма (see AlgorithmCategory).</dd></div>
+            <div><dt>нагрузка</dt> <dd>— доля этого алгоритма в суммарном CPU-времени тиков всей сессии.</dd></div>
+            <div><dt>avg tick, мс</dt> <dd>— среднее время одного вызова generate_signals().</dd></div>
+            <div><dt>CPU суммарно, с</dt> <dd>— накопленное process-CPU время всех тиков за сессию.</dd></div>
+            <div><dt>fit, с</dt> <dd>— время обучения модели на этапе warm-up (в изолированном подпроцессе).</dd></div>
+            <div><dt>Δ RSS fit, MB</dt> <dd>— прирост резидентной памяти во время fit (пик RSS для изолированных воркеров).</dd></div>
+            <div><dt>сделок</dt> <dd>— число реально исполненных брокером сделок (SimulatedBroker.trade_log).</dd></div>
+            <div><dt>P&amp;L, ₽</dt> <dd>— прибыль/убыток в рублях от стартового капитала сессии.</dd></div>
+            <div><dt>Sharpe</dt> <dd>— коэффициент Шарпа доходности стратегии за сессию.</dd></div>
+            <div><dt>статус</dt> <dd>— «ok» или «ошибка», если тик или fit завершился исключением.</dd></div>
+          </dl>
+          <div class="table-wrap">
+            <table id="algoTable">
+              <thead>
+                <tr>
+                  <th class="th-sort" data-col="name">алгоритм<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="category">категория<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="share">нагрузка<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="avg_tick">avg tick, мс<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="cpu_total">CPU суммарно, с<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="fit_seconds">fit, с<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="rss">Δ RSS fit, MB<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="trades">сделок<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="pnl">P&amp;L, ₽<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="sharpe">Sharpe<span class="sort-arrow"></span></th>
+                  <th class="th-sort" data-col="status">статус<span class="sort-arrow"></span></th>
+                </tr>
+              </thead>
+              <tbody><tr><td colspan="11" class="muted">нет данных — запустите симуляцию</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-log">
+        <div class="section-lead"><h3>Диагностика</h3></div>
+        <div class="card" style="--card-accent: var(--bad)">
+          <h2>
+            <span class="card-icon"><svg class="icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+            Лог процесса
+          </h2>
+          <pre id="logTail" class="muted">(пусто)</pre>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function setMsg(el, text, ok) {
+  el.textContent = text;
+  el.className = 'msg ' + (ok ? 'ok' : 'err');
+  if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 5000);
+}
+
+function fmt(v, digits) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '—';
+  return Number(v).toFixed(digits === undefined ? 1 : digits);
+}
+
+// ---------------- config form ----------------
+
+function fillConfigForm(cfg) {
+  $('cf_tickers').value = (cfg.tickers || []).join(',');
+  $('cf_interval').value = cfg.interval || '5min';
+  $('cf_capital').value = cfg.starting_capital_rub;
+  $('cf_cost_bps').value = cfg.transaction_cost_bps;
+  $('cf_session_start').value = cfg.session_start;
+  $('cf_session_end').value = cfg.session_end;
+  $('cf_warmup_days').value = cfg.warmup_days;
+  $('cf_poll_interval').value = cfg.poll_interval_seconds;
+  $('cf_max_duration').value = cfg.max_duration_seconds ?? '';
+  $('cf_autosave').value = cfg.autosave_every_ticks;
+  $('cf_demo_speed').value = cfg.demo_speed_ms ?? '';
+  $('cf_basename').value = cfg.basename;
+  $('cf_news_monitor').checked = !!cfg.run_news_monitor;
+  const days = new Set((cfg.trading_days || []).map(String));
+  document.querySelectorAll('#cf_trading_days input').forEach(cb => cb.checked = days.has(cb.value));
+}
+
+function readConfigForm() {
+  const days = [...document.querySelectorAll('#cf_trading_days input:checked')].map(cb => Number(cb.value));
+  const num = (id) => { const v = $(id).value; return v === '' ? null : Number(v); };
+  return {
+    tickers: $('cf_tickers').value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
+    interval: $('cf_interval').value,
+    starting_capital_rub: num('cf_capital'),
+    transaction_cost_bps: num('cf_cost_bps'),
+    session_start: $('cf_session_start').value,
+    session_end: $('cf_session_end').value,
+    warmup_days: num('cf_warmup_days'),
+    trading_days: days,
+    poll_interval_seconds: num('cf_poll_interval'),
+    max_duration_seconds: num('cf_max_duration'),
+    autosave_every_ticks: num('cf_autosave'),
+    demo_speed_ms: num('cf_demo_speed'),
+    basename: $('cf_basename').value.trim(),
+    run_news_monitor: $('cf_news_monitor').checked,
+  };
+}
+
+async function loadConfig() {
+  const r = await fetch('/api/config');
+  const data = await r.json();
+  fillConfigForm(data.config);
+  return data.config;
+}
+
+$('configForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(readConfigForm()) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'ошибка сохранения');
+    fillConfigForm(data.config);
+    setMsg($('configMsg'), 'сохранено', true);
+  } catch (err) { setMsg($('configMsg'), err.message, false); }
+});
+$('btnReloadConfig').addEventListener('click', loadConfig);
+
+// ---------------- algorithm picker ----------------
+
+let algoCatalog = [];
+
+function renderAlgoList(filterText) {
+  const box = $('algoList');
+  const f = (filterText || '').toLowerCase();
+  const groups = {};
+  for (const a of algoCatalog) {
+    const hay = (a.name + ' ' + a.module + ' ' + a.category).toLowerCase();
+    if (f && !hay.includes(f)) continue;
+    (groups[a.category] ||= []).push(a);
+  }
+  const cats = Object.keys(groups).sort();
+  if (cats.length === 0) { box.innerHTML = '<div class="muted">ничего не найдено</div>'; return; }
+  const checkedModules = new Set(getSelectedAlgorithms());
+  let html = '';
+  for (const cat of cats) {
+    html += `<div class="algo-group-title">${cat}</div>`;
+    for (const a of groups[cat]) {
+      const checked = checkedModules.has(a.module) ? 'checked' : '';
+      html += `<label class="algo-item"><input type="checkbox" value="${a.module}" ${checked}> ${a.name} <span class="mod">(${a.module})</span></label>`;
+    }
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('input').forEach(cb => cb.addEventListener('change', updateAlgoCount));
+  updateAlgoCount();
+}
+
+function getSelectedAlgorithms() {
+  return [...document.querySelectorAll('#algoList input:checked')].map(cb => cb.value);
+}
+
+function updateAlgoCount() {
+  $('algoSelectedCount').textContent = getSelectedAlgorithms().length;
+}
+
+async function loadAlgorithms() {
+  const r = await fetch('/api/algorithms');
+  const data = await r.json();
+  algoCatalog = data.found || [];
+  renderAlgoList('');
+}
+
+// ---------------- news feed toggles ----------------
+
+function renderFeedList(feeds) {
+  const box = $('feedList');
+  if (!feeds || feeds.length === 0) { box.innerHTML = '<div class="muted">источники не найдены</div>'; return; }
+  let html = '';
+  for (const f of feeds) {
+    const checked = f.enabled ? 'checked' : '';
+    html += `<label class="algo-item"><input type="checkbox" data-source="${f.source}" ${checked}> ${f.source} <span class="mod">(${f.url})</span></label>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('input').forEach(cb => cb.addEventListener('change', onFeedToggle));
+}
+
+async function onFeedToggle(e) {
+  const cb = e.target;
+  const source = cb.dataset.source;
+  const enabled = cb.checked;
+  cb.disabled = true;
+  try {
+    const r = await fetch('/api/news_feeds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source, enabled }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'ошибка сохранения');
+    setMsg($('feedMsg'), `${source}: ${enabled ? 'включен' : 'выключен'}`, true);
+  } catch (err) {
+    cb.checked = !enabled; // revert on failure
+    setMsg($('feedMsg'), err.message, false);
+  } finally {
+    cb.disabled = false;
+  }
+}
+
+async function loadNewsFeeds() {
+  const r = await fetch('/api/news_feeds');
+  const data = await r.json();
+  renderFeedList(data.feeds || []);
+}
+
+$('algoFilter').addEventListener('input', (e) => renderAlgoList(e.target.value));
+$('algoSelectAll').addEventListener('click', (e) => { e.preventDefault(); document.querySelectorAll('#algoList input').forEach(cb => cb.checked = true); updateAlgoCount(); });
+$('algoSelectNone').addEventListener('click', (e) => { e.preventDefault(); document.querySelectorAll('#algoList input').forEach(cb => cb.checked = false); updateAlgoCount(); });
+
+$('rn_demo').addEventListener('change', (e) => {
+  const on = e.target.checked;
+  $('rn_lookback_field').style.display = on ? '' : 'none';
+  $('rn_speed_row').style.display = on ? '' : 'none';
+});
+$('rn_demo_fastest').addEventListener('change', (e) => {
+  $('rn_demo_speed').disabled = e.target.checked;
+  if (e.target.checked) $('rn_demo_speed').value = '0';
+  else if ($('rn_demo_speed').value === '0') $('rn_demo_speed').value = '';
+});
+
+// ---------------- run controls ----------------
+
+$('btnStart').addEventListener('click', async () => {
+  const num = (id) => { const v = $(id).value; return v === '' ? null : Number(v); };
+  const demo = $('rn_demo').checked;
+  const body = {
+    demo,
+    lookback_days: demo ? num('rn_lookback') : null,
+    demo_speed_ms: demo ? (($('rn_demo_fastest').checked) ? 0 : num('rn_demo_speed')) : null,
+    duration: num('rn_duration'),
+    warmup_days: num('rn_warmup'),
+    basename: $('rn_basename').value.trim() || null,
+    algorithms: getSelectedAlgorithms(),
+  };
+  try {
+    $('btnStart').disabled = true;
+    const r = await fetch('/api/run/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'ошибка запуска');
+    setMsg($('runMsg'), `запущено, PID ${data.pid}`, true);
+  } catch (err) { setMsg($('runMsg'), err.message, false); $('btnStart').disabled = false; }
+});
+
+$('btnStop').addEventListener('click', async () => {
+  $('btnStop').disabled = true;
+  try {
+    const r = await fetch('/api/run/stop', { method: 'POST' });
+    const data = await r.json();
+    setMsg($('runMsg'), data.running ? 'останавливается...' : 'остановлено', true);
+  } catch (err) { setMsg($('runMsg'), err.message, false); }
+});
+
+// ---------------- live status polling ----------------
+
+function fmtElapsed(sec) {
+  if (sec === null || sec === undefined) return '—';
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return (h ? h + 'ч ' : '') + (m ? m + 'м ' : '') + s + 'с';
+}
+
+// ---------------- algo table: sortable columns ----------------
+
+const TABLE_COLS = {
+  name:      { type: 'string', get: r => (r.algorithm_name || r.spec_name || '').toLowerCase() },
+  category:  { type: 'string', get: r => (r.category || '').toLowerCase() },
+  share:     { type: 'number', get: r => r.resource && r.resource.cpu_load_share_pct },
+  avg_tick:  { type: 'number', get: r => r.resource && r.resource.avg_tick_ms },
+  cpu_total: { type: 'number', get: r => r.resource && r.resource.tick_cpu_seconds_total },
+  fit_seconds: { type: 'number', get: r => r.resource && r.resource.fit_seconds },
+  rss:       { type: 'number', get: r => r.resource && (r.resource.fit_rss_delta_mb ?? r.resource.fit_peak_rss_mb) },
+  trades:    { type: 'number', get: r => r.n_trades_executed },
+  pnl:       { type: 'number', get: r => r.pnl_rub },
+  sharpe:    { type: 'number', get: r => r.sharpe_ratio },
+  status:    { type: 'number', get: r => (r.error ? 1 : 0) },
+};
+
+let sortState = { col: 'share', dir: 'desc' };
+
+function applySort(rows) {
+  const spec = TABLE_COLS[sortState.col];
+  const dirMul = sortState.dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    let av = spec.get(a), bv = spec.get(b);
+    const aMissing = av === null || av === undefined || (typeof av === 'number' && Number.isNaN(av));
+    const bMissing = bv === null || bv === undefined || (typeof bv === 'number' && Number.isNaN(bv));
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;   // missing values always sort last, regardless of direction
+    if (bMissing) return -1;
+    if (spec.type === 'string') return dirMul * String(av).localeCompare(String(bv), 'ru');
+    return dirMul * (av - bv);
+  });
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('#algoTable th.th-sort').forEach(th => {
+    const active = th.dataset.col === sortState.col;
+    th.classList.toggle('active', active);
+    const arrow = th.querySelector('.sort-arrow');
+    arrow.textContent = active ? (sortState.dir === 'asc' ? '▲' : '▼') : '';
+  });
+}
+
+document.querySelectorAll('#algoTable th.th-sort').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortState.col === col) {
+      sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortState = { col, dir: TABLE_COLS[col].type === 'string' ? 'asc' : 'desc' };
+    }
+    updateSortHeaders();
+    renderAlgoTable(lastAlgoRows);
+  });
+});
+
+$('btnLegend').addEventListener('click', () => {
+  const panel = $('tableLegend');
+  const willShow = panel.hidden;
+  panel.hidden = !willShow;
+  $('btnLegend').setAttribute('aria-expanded', String(willShow));
+});
+
+let lastAlgoRows = null;
+
+function renderAlgoTable(rows) {
+  lastAlgoRows = rows;
+  const tbody = document.querySelector('#algoTable tbody');
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" class="muted">нет данных — запустите симуляцию</td></tr>';
+    return;
+  }
+  const sorted = applySort(rows);
+  tbody.innerHTML = sorted.map(r => {
+    const res = r.resource || {};
+    const share = res.cpu_load_share_pct;
+    const barWidth = share ? Math.max(2, Math.min(100, share)) : 0;
+    const pnl = r.pnl_rub;
+    const pnlClass = pnl > 0 ? 'pos' : (pnl < 0 ? 'neg' : '');
+    const errRow = r.error ? 'err-row' : '';
+    const statusHtml = r.error
+      ? '<span class="status-pill err">ошибка</span>'
+      : '<span class="status-pill ok">ok</span>';
+    return `<tr class="${errRow}">
+      <td>${r.algorithm_name || r.spec_name}</td>
+      <td>${r.category || ''}</td>
+      <td>${share !== null && share !== undefined ? `<span class="load-bar" style="width:${barWidth}px"></span>${fmt(share,1)}%` : '—'}</td>
+      <td>${fmt(res.avg_tick_ms, 2)}</td>
+      <td>${fmt(res.tick_cpu_seconds_total, 3)}</td>
+      <td>${fmt(res.fit_seconds, 2)}</td>
+      <td>${res.fit_rss_delta_mb !== undefined ? fmt(res.fit_rss_delta_mb, 1) : (res.fit_peak_rss_mb !== undefined ? fmt(res.fit_peak_rss_mb,1) : '—')}</td>
+      <td>${r.n_trades_executed ?? ''}</td>
+      <td class="${pnlClass}">${pnl !== undefined && pnl !== null ? fmt(pnl, 0) : ''}</td>
+      <td>${fmt(r.sharpe_ratio, 2)}</td>
+      <td>${statusHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ---------------- top-5 most profitable algorithms (bar chart) ----------------
+
+function renderTop5Chart(rows) {
+  const box = $('top5Chart');
+  const ranked = (rows || [])
+    .filter(r => !r.error && r.pnl_rub !== null && r.pnl_rub !== undefined && !Number.isNaN(r.pnl_rub))
+    .sort((a, b) => b.pnl_rub - a.pnl_rub)
+    .slice(0, 5);
+  if (ranked.length === 0) {
+    box.innerHTML = '<div class="muted">нет данных — запустите симуляцию</div>';
+    return;
+  }
+  const maxAbs = Math.max(1, ...ranked.map(r => Math.abs(r.pnl_rub)));
+  box.innerHTML = ranked.map((r, i) => {
+    const pnl = r.pnl_rub;
+    const pos = pnl >= 0;
+    const pct = Math.max(2, Math.min(100, Math.abs(pnl) / maxAbs * 100));
+    const name = r.algorithm_name || r.spec_name;
+    return `<div class="bar-row">
+      <div class="bar-name" title="${name}"><span class="bar-rank">${i + 1}</span>${name}</div>
+      <div class="bar-track">
+        <div class="bar-neg-cell">${!pos ? `<div class="bar-fill neg" style="width:${pct}%"></div>` : ''}</div>
+        <div class="bar-pos-cell">${pos ? `<div class="bar-fill pos" style="width:${pct}%"></div>` : ''}</div>
+      </div>
+      <div class="bar-value ${pos ? 'pos' : 'neg'}">${pos ? '+' : ''}${fmt(pnl, 0)} ₽</div>
+    </div>`;
+  }).join('');
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+
+    const badge = $('statusBadge');
+    if (s.running) {
+      badge.className = 'badge running';
+      badge.textContent = `выполняется — ${s.demo ? 'demo' : 'live'} — PID ${s.pid}`;
+      $('btnStart').disabled = true;
+      $('btnStop').disabled = false;
+    } else {
+      badge.className = 'badge idle';
+      badge.textContent = s.returncode ? `остановлено (код ${s.returncode})` : 'простой';
+      $('btnStart').disabled = false;
+      $('btnStop').disabled = true;
+    }
+
+    const sl = s.system_load;
+    $('g_cpu').textContent = sl ? fmt(sl.cpu_percent, 0) : '—';
+    $('g_rss').textContent = sl ? fmt(sl.rss_mb, 0) : '—';
+    $('g_threads').textContent = sl ? sl.num_threads : '—';
+    $('g_children').textContent = sl ? sl.n_child_processes : '—';
+    $('g_elapsed').textContent = fmtElapsed(s.elapsed_seconds);
+    $('g_ticks').textContent = (s.progress && s.progress.n_ticks) ?? '—';
+
+    renderAlgoTable(s.progress ? s.progress.results : null);
+    renderTop5Chart(s.progress ? s.progress.results : null);
+
+    const logEl = $('logTail');
+    if (s.log_tail) {
+      const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+      logEl.textContent = s.log_tail;
+      logEl.className = '';
+      if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    $('lastUpdated').textContent = 'обновлено ' + new Date().toLocaleTimeString('ru-RU');
+  } catch (err) {
+    // server hiccup - keep last known UI, try again next tick
+  }
+}
+
+// ---------------- sidebar nav: scroll-spy ----------------
+
+const navLinks = [...document.querySelectorAll('.nav-link')];
+const navSections = navLinks.map(a => document.getElementById(a.dataset.section)).filter(Boolean);
+
+function setActiveNav(id) {
+  navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === id));
+}
+
+if ('IntersectionObserver' in window && navSections.length) {
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+    if (visible.length) setActiveNav(visible[0].target.id);
+  }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
+  navSections.forEach(el => observer.observe(el));
+} else {
+  setActiveNav('sec-overview');
+}
+
+(async function init() {
+  updateSortHeaders();
+  await loadConfig();
+  await loadAlgorithms();
+  await loadNewsFeeds();
+  await pollStatus();
+  setInterval(pollStatus, 2000);
+})();
+</script>
+</body>
+</html>

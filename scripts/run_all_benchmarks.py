@@ -42,10 +42,8 @@ Run: source .venv/bin/activate && python scripts/run_all_benchmarks.py
 """
 
 import importlib
-import inspect
 import json
 import os
-import pkgutil
 import subprocess
 import sys
 from pathlib import Path
@@ -78,46 +76,13 @@ RESULT_PREFIX = "RESULT\t"
 
 # ---------------------------------------------------------------------------
 # Algorithm discovery (safe to do in the main process - segfaults are
-# triggered by model training, not by merely importing a module).
+# triggered by model training, not by merely importing a module). Shared
+# with scripts/run_market_simulation.py via core/algorithm_discovery.py.
 # ---------------------------------------------------------------------------
 
-def _is_instantiable(cls: type) -> bool:
-    """True if cls() can be called with no arguments (all __init__ parameters
-    other than self/*args/**kwargs have default values)."""
-    try:
-        sig = inspect.signature(cls.__init__)
-    except (TypeError, ValueError):
-        return False
-    for name, param in sig.parameters.items():
-        if name == "self":
-            continue
-        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
-            continue
-        if param.default is param.empty:
-            return False
-    return True
+from core.algorithm_discovery import discover_algorithms  # noqa: E402
 
-
-def discover_algorithms() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """Scans src/algorithms/*.py and returns (found, skipped) - lists of
-    (module_name, class_name), sorted by module name."""
-    import algorithms as algorithms_pkg
-    from core.base import BaseTradingAlgorithm
-
-    found, skipped = [], []
-    algo_dir = Path(algorithms_pkg.__file__).parent
-    module_names = sorted(m.name for m in pkgutil.iter_modules([str(algo_dir)]))
-    for modname in module_names:
-        module = importlib.import_module(f"algorithms.{modname}")
-        for _, cls in inspect.getmembers(module, inspect.isclass):
-            if cls.__module__ != module.__name__:
-                continue  # only classes defined directly in this file
-            if not issubclass(cls, BaseTradingAlgorithm) or cls is BaseTradingAlgorithm:
-                continue
-            if inspect.isabstract(cls):
-                continue
-            (found if _is_instantiable(cls) else skipped).append((modname, cls.__name__))
-    return found, skipped
+STARTING_CAPITAL_RUB = 1_000_000.0
 
 """
 --worker mode: trains and tests ONE algorithm in a separate process, prints
@@ -145,7 +110,7 @@ def _run_worker(modname: str, clsname: str) -> None:
     def on_stage(stage: str) -> None:
         print(f"{STAGE_PREFIX}{stage}", flush=True)
 
-    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7)
+    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7, starting_capital=STARTING_CAPITAL_RUB)
     result = backtester.run(algo, run_data, on_stage=on_stage)
 
     row = {"spec_name": modname, "class_name": clsname, "algo_display_name": algo.name}
@@ -236,13 +201,26 @@ def main() -> None:
         row = _run_one_algorithm(modname, clsname, bar)
         rows.append(row)
         bar.finish(format_result(row.get("algo_display_name", clsname), row))
+        # Autosave after every algorithm - a run killed partway through
+        # (segfault storm, Ctrl-C, machine sleep) still leaves everything
+        # completed so far in results/all_benchmark_results.{json,md}.
+        _save_results(rows, found, skipped)
 
+    print("\nSaved results/all_benchmark_results.json and .md")
+
+    n_errors = sum(1 for r in rows if r.get("error"))
+    if n_errors:
+        print(f"Finished with errors: {n_errors}/{len(rows)}")
+
+
+def _save_results(rows: list[dict], found: list[tuple[str, str]], skipped: list[tuple[str, str]]) -> None:
     results_df = pd.DataFrame(rows).drop(columns=["algo_display_name", "class_name"], errors="ignore")
     RESULTS_DIR.mkdir(exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "n_algorithms_found": len(found),
         "n_algorithms_skipped": len(skipped),
+        "n_algorithms_completed": len(rows),
         "skipped": [f"{modname}.{clsname}" for modname, clsname in skipped],
         "results": results_df.to_dict(orient="records"),
     }
@@ -253,11 +231,6 @@ def main() -> None:
     (RESULTS_DIR / "all_benchmark_results.md").write_text(
         BenchmarkRunner._to_markdown(results_df), encoding="utf-8"
     )
-    print("\nSaved results/all_benchmark_results.json and .md")
-
-    n_errors = sum(1 for r in rows if r.get("error"))
-    if n_errors:
-        print(f"Finished with errors: {n_errors}/{len(rows)}")
 
 
 if __name__ == "__main__":

@@ -89,6 +89,7 @@ START = datetime(2019, 1, 1, tzinfo=timezone.utc)
 END = datetime.now(timezone.utc)
 MIN_ROWS = 300
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
+STARTING_CAPITAL_RUB = 1_000_000.0
 
 SINGLE_ASSET_ALGOS = {
     "lightgbm_ranker": LightGBMRanker,
@@ -178,6 +179,8 @@ def aggregate_single_asset(df: pd.DataFrame) -> pd.DataFrame:
             "mean_total_return": g["total_return"].mean(),
             "median_total_return": g["total_return"].median(),
             "mean_train_seconds": g["train_seconds"].mean(),
+            "mean_pnl_rub": g["pnl_rub"].mean(),
+            "total_pnl_rub": g["pnl_rub"].sum(),
         })
     return pd.DataFrame(agg_rows).sort_values("mean_sharpe", ascending=False)
 
@@ -228,10 +231,22 @@ def save_markdown(agg_df: pd.DataFrame, multi_df: pd.DataFrame, n_tickers: int, 
     disp["mean_total_return"] = disp["mean_total_return"].map(lambda x: f"{x:.2%}")
     disp["median_total_return"] = disp["median_total_return"].map(lambda x: f"{x:.2%}")
     disp["mean_train_seconds"] = disp["mean_train_seconds"].map(lambda x: f"{x:.3f}")
+    disp["mean_pnl_rub"] = disp["mean_pnl_rub"].map(_money)
+    disp["total_pnl_rub"] = disp["total_pnl_rub"].map(_money)
     cols = ["algorithm_name", "category", "n_tickers_ok", "n_tickers_total", "mean_sharpe",
             "median_sharpe", "std_sharpe", "pct_positive_sharpe", "mean_hit_rate",
-            "mean_max_drawdown", "mean_total_return", "median_total_return", "mean_train_seconds"]
+            "mean_max_drawdown", "mean_total_return", "median_total_return", "mean_train_seconds",
+            "mean_pnl_rub", "total_pnl_rub"]
     lines.append(disp[cols].to_markdown(index=False))
+    lines.append("")
+
+    ranked_by_money = agg_df.sort_values("total_pnl_rub", ascending=False)
+    lines.append(
+        f"Made the most money (summed across tickers): **{ranked_by_money.iloc[0]['algorithm_name']}** "
+        f"({_money(ranked_by_money.iloc[0]['total_pnl_rub'])}). "
+        f"Lost the most: **{ranked_by_money.iloc[-1]['algorithm_name']}** "
+        f"({_money(ranked_by_money.iloc[-1]['total_pnl_rub'])})."
+    )
     lines.append("")
 
     lines.append("## Multi-asset algorithms on the full available universe")
@@ -242,12 +257,20 @@ def save_markdown(agg_df: pd.DataFrame, multi_df: pd.DataFrame, n_tickers: int, 
             mdisp[col] = mdisp[col].map(lambda x: f"{x:.2%}" if pd.notnull(x) else "")
     if "sharpe_ratio" in mdisp.columns:
         mdisp["sharpe_ratio"] = mdisp["sharpe_ratio"].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
+    for col in ("starting_capital", "final_capital", "pnl_rub"):
+        if col in mdisp.columns:
+            mdisp[col] = mdisp[col].map(_money)
     show_cols = [c for c in ["spec_name", "algorithm_name", "tickers", "sharpe_ratio", "total_return",
-                              "max_drawdown", "win_rate", "hit_rate", "n_trades", "error"] if c in mdisp.columns]
+                              "max_drawdown", "win_rate", "hit_rate", "n_trades", "pnl_rub", "error"]
+                 if c in mdisp.columns]
     lines.append(mdisp[show_cols].to_markdown(index=False))
     lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _money(x: float) -> str:
+    return f"{x:,.0f} ₽".replace(",", " ") if pd.notnull(x) else ""
 
 
 def main() -> None:
@@ -256,7 +279,7 @@ def main() -> None:
     data = load_universe(loader)
     print(f"Universe ready: {len(data)}/{len(TICKERS_100)} tickers usable\n")
 
-    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7)
+    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7, starting_capital=STARTING_CAPITAL_RUB)
 
     print("=== Single-asset cross-sectional run ===")
     single_df = run_single_asset_cross_sectional(backtester, data)

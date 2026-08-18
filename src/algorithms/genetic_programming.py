@@ -2,7 +2,7 @@
 Genetic programming / symbolic regression - automated search for alpha
 formulas (in the spirit of WorldQuant "101 Formulaic Alphas").
 
-symbolic regression - an "evolutionary algorithm" combines technical features
+An evolutionary algorithm combines technical features
 with arithmetic operations (+, -, *, /, sqrt, abs, ...) into tree-shaped
 formulas and selects those that best predict fwd_return. The discovered
 formula is interpretable (it can be read as an ordinary mathematical
@@ -25,7 +25,7 @@ import pandas as pd
 from gplearn.genetic import SymbolicRegressor
 
 from core.base import AlgorithmCategory, SingleAssetAlgorithm
-from core.features import chronological_split, make_features, split_features_target
+from core.features import chronological_split, make_features, select_features, split_features_target
 
 _GP_FEATURE_COLUMNS = ["return_5d", "return_20d", "volatility_20", "rsi_14", "macd", "volume_change_5d"]
 
@@ -96,7 +96,7 @@ class SymbolicRegressionAlpha(SingleAssetAlgorithm):
             return pd.Series(0.0, index=data.index)
 
         feat_df = make_features(data, horizon=self.horizon)
-        X, _ = split_features_target(feat_df, target_col="fwd_return", feature_cols=_GP_FEATURE_COLUMNS)
+        X = select_features(feat_df, feature_cols=_GP_FEATURE_COLUMNS)
         if X.empty:
             return pd.Series(0.0, index=data.index)
 

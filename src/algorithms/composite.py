@@ -24,6 +24,16 @@ component is covered by the documented strength of another:
     than raw momentum" - `ThompsonWithStrongArms` replaces the momentum "arms"
     with an arbitrary composite pipeline (e.g. Elastic Net + risk
     overlay); this is a direct test of that finding.
+  - `NewsSentimentSignal` trades on any qualifying headline regardless of the
+    prevailing trend - it has no notion of "the market is already in a
+    confirmed drawdown, a bullish story is less trustworthy here." The HMM
+    Regime Detector's weakness is the mirror image: it has no fundamental or
+    event information at all, only price/volatility-derived state.
+    `NewsRegimeGate` fits one `HMMRegimeDetector` per ticker (news coverage is
+    multi-asset, the HMM is single-asset, so unlike the wrappers above this
+    one loops per ticker the way `ThompsonWithStrongArms` does) and scales the
+    news signal by the detected regime, damping or zeroing it out in a
+    confirmed bear regime instead of trading every headline at full size.
 
 All classes implement the standard BaseTradingAlgorithm interface, so they
 plug into BenchmarkRunner/Backtester just like regular algorithms.
@@ -229,6 +239,65 @@ class ThompsonWithStrongArms(MultiAssetAlgorithm):
         return signals
 
 
+class NewsRegimeGate(MultiAssetAlgorithm):
+    """News sentiment signal, scaled per ticker by its own HMM-detected regime."""
+
+    category = AlgorithmCategory.COMPOSITE
+
+    def __init__(
+        self,
+        news_algo_factory: Callable[[], MultiAssetAlgorithm],
+        regime_algo_factory: Callable[[], SingleAssetAlgorithm],
+        bear_scale: float = 0.0,
+        flat_scale: float = 1.0,
+        **kwargs,
+    ):
+        super().__init__(bear_scale=bear_scale, flat_scale=flat_scale, **kwargs)
+        self.news_algo = news_algo_factory()
+        self.regime_algo_factory = regime_algo_factory
+        self.bear_scale = bear_scale
+        self.flat_scale = flat_scale
+        self._regime_algos: dict[str, SingleAssetAlgorithm] = {}
+        self.name = f"{self.news_algo.name} (regime-gated)"
+        self.description = (
+            f"Composite: signal '{self.news_algo.name}', scaled per ticker by its own HMM "
+            f"regime detector - full size in a bull regime, {flat_scale}x in a flat regime, "
+            f"{bear_scale}x in a confirmed bear regime, instead of trading every headline "
+            f"at full size regardless of the prevailing trend."
+        )
+
+    def fit(self, train_data: dict[str, pd.DataFrame]) -> "NewsRegimeGate":
+        self.news_algo.fit(train_data)
+        any_fitted = False
+        for ticker, df in train_data.items():
+            regime_algo = self.regime_algo_factory()
+            regime_algo.fit(df)
+            self._regime_algos[ticker] = regime_algo
+            any_fitted = any_fitted or regime_algo.is_fitted
+        self.is_fitted = self.news_algo.is_fitted and any_fitted
+        return self
+
+    def generate_signals(self, data: dict[str, pd.DataFrame]) -> dict[str, pd.Series]:
+        if not self.is_fitted:
+            return {t: pd.Series(0.0, index=df.index) for t, df in data.items()}
+
+        news_signals = self.news_algo.generate_signals(data)
+
+        signals: dict[str, pd.Series] = {}
+        for ticker, df in data.items():
+            news_signal = news_signals.get(ticker, pd.Series(0.0, index=df.index)).reindex(df.index).fillna(0.0)
+            regime_algo = self._regime_algos.get(ticker)
+            if regime_algo is None or not regime_algo.is_fitted:
+                scale = pd.Series(self.flat_scale, index=df.index)
+            else:
+                regime = regime_algo.generate_signals(df).reindex(df.index).fillna(0.0)
+                scale = pd.Series(self.flat_scale, index=df.index)
+                scale[regime > 0] = 1.0
+                scale[regime < 0] = self.bear_scale
+            signals[ticker] = (news_signal * scale).clip(-1.0, 1.0)
+        return signals
+
+
 if __name__ == "__main__":
     import sys
     from pathlib import Path
@@ -268,3 +337,46 @@ if __name__ == "__main__":
     signals = allocator.generate_signals(test_data)
     for ticker, s in signals.items():
         print(ticker, s.describe())
+
+    from algorithms.hmm_regime import HMMRegimeDetector
+    from algorithms.news_sentiment import NewsSentimentSignal
+
+    def make_regime_ticker_df(seed: int) -> pd.DataFrame:
+        # Same regime-transition construction as hmm_regime.py's own smoke test,
+        # plus a synthetic sentiment_score column that fires bullish news
+        # uniformly at random regardless of the underlying regime - this is
+        # exactly the failure mode NewsRegimeGate exists to damp.
+        local_rng = np.random.default_rng(seed)
+        n_bars = 500
+        regime_path = np.random.default_rng(seed + 1).choice([0, 1, 2], size=n_bars, p=[0.4, 0.4, 0.2])
+        drift_by_regime = {0: 0.002, 1: 0.0, 2: -0.004}
+        vol_by_regime = {0: 0.008, 1: 0.006, 2: 0.02}
+        returns = np.array([local_rng.normal(drift_by_regime[r], vol_by_regime[r]) for r in regime_path])
+        regime_price = 100 * np.exp(np.cumsum(returns))
+        sentiment = np.where(local_rng.random(n_bars) < 0.15, 0.6, np.nan)
+        return pd.DataFrame(
+            {
+                "open": regime_price, "high": regime_price * 1.01, "low": regime_price * 0.99,
+                "close": regime_price, "volume": local_rng.integers(1_000_000, 5_000_000, n_bars),
+                "sentiment_score": sentiment,
+            },
+            index=pd.date_range("2023-01-01", periods=n_bars, freq="B"),
+        )
+
+    regime_data = {"SBER": make_regime_ticker_df(10), "GAZP": make_regime_ticker_df(20)}
+    regime_train = {t: df.iloc[:350] for t, df in regime_data.items()}
+    regime_test = {t: df.iloc[350:] for t, df in regime_data.items()}
+
+    gated = NewsRegimeGate(
+        news_algo_factory=lambda: NewsSentimentSignal(),
+        regime_algo_factory=lambda: HMMRegimeDetector(),
+    )
+    gated.fit(regime_train)
+    gated_signals = gated.generate_signals(regime_test)
+    for ticker, s in gated_signals.items():
+        bear_mask = gated._regime_algos[ticker].generate_signals(regime_test[ticker]) < 0
+        print(
+            f"{gated.name} [{ticker}] -> full describe:\n{s.describe()}\n"
+            f"  mean |signal| in bear regime: {s[bear_mask].abs().mean():.4f} "
+            f"vs overall: {s.abs().mean():.4f}"
+        )

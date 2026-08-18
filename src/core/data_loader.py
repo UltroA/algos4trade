@@ -108,6 +108,25 @@ class TInvestDataLoader:
     ) -> dict[str, pd.DataFrame]:
         return {t: self.load_candles(t, start, end, interval, use_cache) for t in tickers}
 
+    def load_recent(
+        self,
+        ticker: str,
+        interval: str = "5min",
+        lookback_days: float = 5.0,
+        use_cache: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Fetch the most recent `lookback_days` of candles up to now. Defaults
+        to `use_cache=False` so callers (the live/demo market simulator, in
+        particular) always get freshly pulled data from T-Invest instead of
+        a parquet snapshot that may already be stale - this is the "dynamic"
+        pull used for live polling, as opposed to `load_candles`'s normal
+        cached-by-date-range behaviour used by the fast backtests.
+        """
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=lookback_days)
+        return self.load_candles(ticker, start, end, interval=interval, use_cache=use_cache)
+
     @staticmethod
     def _to_dataframe(raw_candles: list[dict]) -> pd.DataFrame:
         if not raw_candles:

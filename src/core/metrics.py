@@ -20,6 +20,9 @@ class BacktestMetrics:
     win_rate: float
     hit_rate: float
     n_trades: int
+    starting_capital: float = 1_000_000.0
+    final_capital: float = 1_000_000.0
+    pnl_rub: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -64,6 +67,7 @@ def compute_metrics(
     signals: pd.Series,
     hit_rate: float,
     periods_per_year: int = TRADING_DAYS_PER_YEAR,
+    starting_capital: float = 1_000_000.0,
 ) -> BacktestMetrics:
     """
     strategy_returns - strategy return per period (already accounting for
@@ -73,6 +77,9 @@ def compute_metrics(
     hit_rate         - computed by the caller via compute_hit_rate (the formula
                         depends on the lagged position and raw asset return,
                         neither of which is available inside this function).
+    starting_capital - notional account size (RUB) used to express total_return
+                        as money won/lost (final_capital, pnl_rub), alongside
+                        the percentage metrics above.
     """
     strategy_returns = strategy_returns.fillna(0.0)
     equity_curve = (1.0 + strategy_returns).cumprod()
@@ -91,6 +98,8 @@ def compute_metrics(
     position_changes = signals.diff().fillna(signals.iloc[0] if len(signals) else 0)
     n_trades = int((position_changes.abs() > 1e-9).sum())
 
+    final_capital = starting_capital * (1.0 + total_return)
+
     return BacktestMetrics(
         total_return=total_return,
         annualized_return=annualized_return,
@@ -100,4 +109,7 @@ def compute_metrics(
         win_rate=win_rate,
         hit_rate=hit_rate,
         n_trades=n_trades,
+        starting_capital=starting_capital,
+        final_capital=final_capital,
+        pnl_rub=final_capital - starting_capital,
     )

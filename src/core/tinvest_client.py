@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -76,12 +77,18 @@ class TInvestClient:
                 "Content-Type": "application/json",
             }
         )
+        # Round-trip latency of the last N successful calls, in ms - the
+        # ground truth for "how long does the real T-Invest API actually
+        # take", used by core.market_simulator.LatencyTracker to calibrate
+        # simulated delay instead of guessing a constant.
+        self._latency_log_ms: deque[float] = deque(maxlen=500)
 
     def call(self, service: str, method: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """Call an arbitrary T-Invest gRPC-gateway method over HTTP/JSON."""
         url = f"{_BASE_URL}/tinkoff.public.invest.api.contract.v1.{service}/{method}"
         last_error: Exception | None = None
         for attempt in range(self._max_retries):
+            t0 = time.perf_counter()
             try:
                 response = self._session.post(
                     url, json=payload or {}, timeout=self._timeout, verify=self._verify
@@ -92,6 +99,7 @@ class TInvestClient:
                 continue
 
             if response.status_code == 200:
+                self._latency_log_ms.append((time.perf_counter() - t0) * 1000.0)
                 return response.json()
             if response.status_code == 429:
                 time.sleep(1.0 * (attempt + 1))
@@ -100,6 +108,10 @@ class TInvestClient:
                 f"{service}/{method} failed: HTTP {response.status_code}: {response.text[:500]}"
             )
         raise TInvestAPIError(f"{service}/{method} failed after {self._max_retries} retries: {last_error}")
+
+    def recent_latencies_ms(self) -> list[float]:
+        """Round-trip latency (ms) of the last successful calls this client made this session."""
+        return list(self._latency_log_ms)
 
     def get_accounts(self) -> list[dict[str, Any]]:
         return self.call("UsersService", "GetAccounts").get("accounts", [])

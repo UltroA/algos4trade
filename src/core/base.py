@@ -39,6 +39,7 @@ class AlgorithmCategory(str, Enum):
     SYMBOLIC_REGRESSION = "symbolic_regression"
     COMPOSITE = "composite_pipeline"
     BASELINE = "baseline"
+    NEWS_SENTIMENT = "news_sentiment"
 
 
 class InputMode(str, Enum):

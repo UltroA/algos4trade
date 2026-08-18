@@ -58,9 +58,15 @@ class Backtester:
     STAGE_SIGNALS = "signal generation"
     STAGE_METRICS = "metrics"
 
-    def __init__(self, transaction_cost_bps: float = 5.0, train_frac: float = 0.7):
+    def __init__(
+        self,
+        transaction_cost_bps: float = 5.0,
+        train_frac: float = 0.7,
+        starting_capital: float = 1_000_000.0,
+    ):
         self.transaction_cost_bps = transaction_cost_bps
         self.train_frac = train_frac
+        self.starting_capital = starting_capital
 
     def run(
         self,
@@ -84,7 +90,10 @@ class Backtester:
                 inference_seconds=0.0,
                 n_train_rows=0,
                 n_test_rows=0,
-                metrics=compute_metrics(pd.Series(dtype=float), pd.Series(dtype=float), hit_rate=float("nan")),
+                metrics=compute_metrics(
+                    pd.Series(dtype=float), pd.Series(dtype=float), hit_rate=float("nan"),
+                    starting_capital=self.starting_capital,
+                ),
                 error=f"{type(exc).__name__}: {exc}",
             )
 
@@ -112,7 +121,7 @@ class Backtester:
         asset_returns = test_df["close"].pct_change().fillna(0.0)
         position_lagged = signals.shift(1).fillna(0.0)
         hit_rate = compute_hit_rate(position_lagged, asset_returns)
-        metrics = compute_metrics(strategy_returns, signals, hit_rate=hit_rate)
+        metrics = compute_metrics(strategy_returns, signals, hit_rate=hit_rate, starting_capital=self.starting_capital)
 
         return BacktestResult(
             algorithm_name=algo.name,
@@ -170,7 +179,9 @@ class Backtester:
             compute_hit_rate(pd.concat(hr_positions, ignore_index=True), pd.concat(hr_asset_returns, ignore_index=True))
             if hr_positions else float("nan")
         )
-        metrics = compute_metrics(portfolio_returns, all_signals, hit_rate=hit_rate)
+        metrics = compute_metrics(
+            portfolio_returns, all_signals, hit_rate=hit_rate, starting_capital=self.starting_capital
+        )
 
         n_train_rows = sum(len(df) for df in train_data.values())
         n_test_rows = sum(len(df) for df in test_data.values())

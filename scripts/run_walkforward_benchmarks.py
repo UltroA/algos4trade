@@ -56,6 +56,11 @@ START = datetime(2019, 1, 1, tzinfo=timezone.utc)
 END = datetime.now(timezone.utc)
 N_WINDOWS = 4
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
+STARTING_CAPITAL_RUB = 1_000_000.0
+
+
+def _money(x: float) -> str:
+    return f"{x:,.0f} ₽".replace(",", " ") if pd.notnull(x) else ""
 
 STRATEGIES = {
     "vae": lambda: VAEFactorModel(),
@@ -93,6 +98,10 @@ def run_walkforward(backtester: Backtester, windows: list[pd.DataFrame]) -> pd.D
             f"w{r['window']}:{r['sharpe_ratio']:.2f}" for r in rows if r["spec_name"] == spec_name
         )
         print(f"[walkforward] {spec_name}: {status}")
+        # checkpoint after each strategy - in case a long run gets interrupted
+        pd.DataFrame(rows).to_json(
+            RESULTS_DIR / "_walkforward_checkpoint.json", orient="records", indent=2, force_ascii=False
+        )
     return pd.DataFrame(rows)
 
 
@@ -112,8 +121,53 @@ def aggregate(raw_df: pd.DataFrame) -> pd.DataFrame:
             "mean_max_drawdown": g["max_drawdown"].mean(),
             "mean_total_return": g["total_return"].mean(),
             "pct_positive_sharpe": (g["sharpe_ratio"] > 0).mean(),
+            "mean_pnl_rub": g["pnl_rub"].mean(),
+            "total_pnl_rub": g["pnl_rub"].sum(),
         })
     return pd.DataFrame(agg_rows).sort_values("mean_sharpe", ascending=False)
+
+
+def save_markdown(agg_df: pd.DataFrame, n_windows: int, path: Path) -> None:
+    lines = [
+        "# Walk-forward validation results (4 non-overlapping windows, SBER)",
+        "",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Windows: {n_windows} non-overlapping chronological blocks, each with its own 70/30 split.",
+        "",
+        "## Spread of Sharpe across windows per strategy",
+        "",
+    ]
+    disp = agg_df.copy()
+    for col in ("mean_sharpe", "std_sharpe", "min_sharpe", "max_sharpe"):
+        disp[col] = disp[col].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
+    disp["pct_positive_sharpe"] = disp["pct_positive_sharpe"].map(lambda x: f"{x:.1%}")
+    disp["mean_hit_rate"] = disp["mean_hit_rate"].map(lambda x: f"{x:.2%}")
+    disp["mean_max_drawdown"] = disp["mean_max_drawdown"].map(lambda x: f"{x:.2%}")
+    disp["mean_total_return"] = disp["mean_total_return"].map(lambda x: f"{x:.2%}")
+    disp["mean_pnl_rub"] = disp["mean_pnl_rub"].map(_money)
+    disp["total_pnl_rub"] = disp["total_pnl_rub"].map(_money)
+    cols = ["algorithm_name", "n_windows_ok", "mean_sharpe", "std_sharpe", "min_sharpe", "max_sharpe",
+            "pct_positive_sharpe", "mean_hit_rate", "mean_max_drawdown", "mean_total_return",
+            "mean_pnl_rub", "total_pnl_rub"]
+    lines.append(disp[cols].to_markdown(index=False))
+    lines.append("")
+
+    if not agg_df.empty:
+        by_money = agg_df.sort_values("total_pnl_rub", ascending=False)
+        lines.append(
+            f"Made the most money (summed across windows): **{by_money.iloc[0]['algorithm_name']}** "
+            f"({_money(by_money.iloc[0]['total_pnl_rub'])}). "
+            f"Lost the most: **{by_money.iloc[-1]['algorithm_name']}** "
+            f"({_money(by_money.iloc[-1]['total_pnl_rub'])})."
+        )
+        lines.append("")
+        lines.append(
+            "A robust strategy should look like itself across windows (low `std_sharpe`), "
+            "not just have a high average - check `min_sharpe`/`max_sharpe` before trusting `mean_sharpe` alone."
+        )
+        lines.append("")
+
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> None:
@@ -125,7 +179,7 @@ def main() -> None:
     for i, w in enumerate(windows, 1):
         print(f"  window {i}: {w.index[0].date()} .. {w.index[-1].date()} ({len(w)} rows)")
 
-    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7)
+    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7, starting_capital=STARTING_CAPITAL_RUB)
 
     raw_df = run_walkforward(backtester, windows)
     agg_df = aggregate(raw_df)
@@ -144,7 +198,12 @@ def main() -> None:
     }
     out_path = RESULTS_DIR / "walkforward_benchmark_results.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-    print(f"\nSaved {out_path}")
+    md_path = RESULTS_DIR / "walkforward_benchmark_results.md"
+    save_markdown(agg_df, N_WINDOWS, md_path)
+    checkpoint = RESULTS_DIR / "_walkforward_checkpoint.json"
+    if checkpoint.exists():
+        checkpoint.unlink()
+    print(f"\nSaved {out_path} and {md_path}")
 
     print("\n--- Aggregated (mean/std/min/max Sharpe across 4 windows) ---")
     print(agg_df[["algorithm_name", "mean_sharpe", "std_sharpe", "min_sharpe", "max_sharpe", "pct_positive_sharpe"]]

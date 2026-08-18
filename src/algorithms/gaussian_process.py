@@ -26,7 +26,7 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
 from sklearn.preprocessing import StandardScaler
 
 from core.base import AlgorithmCategory, SingleAssetAlgorithm
-from core.features import chronological_split, make_features, split_features_target
+from core.features import chronological_split, make_features, select_features, split_features_target
 
 _GP_FEATURE_COLUMNS = ["return_5d", "return_20d", "volatility_20", "rsi_14", "macd"]
 
@@ -132,7 +132,7 @@ class GaussianProcessTrader(SingleAssetAlgorithm):
             return pd.Series(0.0, index=data.index)
 
         feat_df = make_features(data, horizon=self.horizon)
-        X_df, _ = split_features_target(feat_df, target_col="fwd_return", feature_cols=_GP_FEATURE_COLUMNS)
+        X_df = select_features(feat_df, feature_cols=_GP_FEATURE_COLUMNS)
         if X_df.empty:
             return pd.Series(0.0, index=data.index)
 

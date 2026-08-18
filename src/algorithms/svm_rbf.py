@@ -1,7 +1,7 @@
 """
 SVM with an RBF kernel - direction classification on small samples.
 
-support vectors with an RBF kernel predict the probability
+Support vectors with an RBF kernel predict the probability
 of the price rising over the next horizon using the same technical features as
 the project's other supervised models (core.features.make_features).
 

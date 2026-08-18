@@ -1,7 +1,7 @@
 """
 TCN (Temporal Convolutional Network) - causal dilated convolutions over the time series.
 
-serves the same purpose as LSTM/GRU (sequences of prices/volumes/indicators),
+It serves the same purpose as LSTM/GRU (sequences of prices/volumes/indicators),
 but thanks to parallel dilated convolutions it trains
 faster and more stably than recurrent networks. The main weakness is a fixed
 receptive field: the network cannot see patterns longer than the depth

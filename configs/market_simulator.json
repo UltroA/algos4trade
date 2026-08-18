@@ -1,0 +1,36 @@
+{
+  "tickers": [
+    "SBER",
+    "GAZP",
+    "LKOH",
+    "GMKN",
+    "VTBR",
+    "ROSN",
+    "NVTK",
+    "MTSS",
+    "TATN",
+    "MOEX"
+  ],
+  "interval": "5min",
+  "starting_capital_rub": 10000,
+  "transaction_cost_bps": 5,
+  "warmup_days": 20,
+  "session_start": "10:00",
+  "session_end": "18:39",
+  "trading_days": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "poll_interval_seconds": 60,
+  "max_duration_seconds": null,
+  "autosave_every_ticks": 1,
+  "run_news_monitor": true,
+  "demo_speed_ms": 60,
+  "results_dir": "results",
+  "basename": "market_simulation_3"
+}

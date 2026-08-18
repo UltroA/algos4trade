@@ -62,6 +62,11 @@ START = datetime(2019, 1, 1, tzinfo=timezone.utc)
 END = datetime.now(timezone.utc)
 MIN_ROWS = 300
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
+STARTING_CAPITAL_RUB = 1_000_000.0
+
+
+def _money(x: float) -> str:
+    return f"{x:,.0f} ₽".replace(",", " ") if pd.notnull(x) else ""
 
 SINGLE_SPECS = {
     "vae": lambda: VAEFactorModel(),
@@ -100,6 +105,10 @@ def run_single(backtester: Backtester, data: dict[str, pd.DataFrame]) -> pd.Data
             row.update(result.to_flat_dict())
             rows.append(row)
         print(f"[holdout10] {spec_name}: done on {len(data)} tickers")
+        # checkpoint after each algorithm - in case a long run gets interrupted
+        pd.DataFrame(rows).to_json(
+            RESULTS_DIR / "_holdout10_checkpoint.json", orient="records", indent=2, force_ascii=False
+        )
     return pd.DataFrame(rows)
 
 
@@ -140,8 +149,63 @@ def aggregate(raw_df: pd.DataFrame) -> pd.DataFrame:
             "mean_hit_rate": g["hit_rate"].mean(),
             "mean_max_drawdown": g["max_drawdown"].mean(),
             "mean_total_return": g["total_return"].mean(),
+            "mean_pnl_rub": g["pnl_rub"].mean(),
+            "total_pnl_rub": g["pnl_rub"].sum(),
         })
     return pd.DataFrame(agg_rows).sort_values("mean_sharpe", ascending=False)
+
+
+def save_markdown(agg_df: pd.DataFrame, thompson_df: pd.DataFrame, n_tickers: int, path: Path) -> None:
+    lines = [
+        "# Holdout-10 benchmark validation (instruments outside MOEXBMI-100)",
+        "",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Holdout tickers usable: {n_tickers}/{len(HOLDOUT_TICKERS)}",
+        "",
+        "## Single-asset components + composites: aggregated across the 10 holdout tickers",
+        "",
+    ]
+    disp = agg_df.copy()
+    for col in ("mean_sharpe", "median_sharpe"):
+        disp[col] = disp[col].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
+    disp["pct_positive_sharpe"] = disp["pct_positive_sharpe"].map(lambda x: f"{x:.1%}")
+    disp["mean_hit_rate"] = disp["mean_hit_rate"].map(lambda x: f"{x:.2%}")
+    disp["mean_max_drawdown"] = disp["mean_max_drawdown"].map(lambda x: f"{x:.2%}")
+    disp["mean_total_return"] = disp["mean_total_return"].map(lambda x: f"{x:.2%}")
+    disp["mean_pnl_rub"] = disp["mean_pnl_rub"].map(_money)
+    disp["total_pnl_rub"] = disp["total_pnl_rub"].map(_money)
+    cols = ["algorithm_name", "n_tickers_ok", "mean_sharpe", "median_sharpe", "pct_positive_sharpe",
+            "mean_hit_rate", "mean_max_drawdown", "mean_total_return", "mean_pnl_rub", "total_pnl_rub"]
+    lines.append(disp[cols].to_markdown(index=False))
+    lines.append("")
+
+    if not agg_df.empty:
+        by_money = agg_df.sort_values("total_pnl_rub", ascending=False)
+        lines.append(
+            f"Made the most money: **{by_money.iloc[0]['algorithm_name']}** "
+            f"({_money(by_money.iloc[0]['total_pnl_rub'])}). "
+            f"Lost the most: **{by_money.iloc[-1]['algorithm_name']}** "
+            f"({_money(by_money.iloc[-1]['total_pnl_rub'])})."
+        )
+        lines.append("")
+
+    lines.append("## Thompson Sampling: raw momentum arm vs. strong-arm composite")
+    lines.append("")
+    tdisp = thompson_df.copy()
+    for col in ("total_return", "max_drawdown", "hit_rate", "win_rate"):
+        if col in tdisp.columns:
+            tdisp[col] = tdisp[col].map(lambda x: f"{x:.2%}" if pd.notnull(x) else "")
+    if "sharpe_ratio" in tdisp.columns:
+        tdisp["sharpe_ratio"] = tdisp["sharpe_ratio"].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
+    for col in ("starting_capital", "final_capital", "pnl_rub"):
+        if col in tdisp.columns:
+            tdisp[col] = tdisp[col].map(_money)
+    show_cols = [c for c in ["spec_name", "algorithm_name", "sharpe_ratio", "total_return", "max_drawdown",
+                              "n_trades", "pnl_rub", "error"] if c in tdisp.columns]
+    lines.append(tdisp[show_cols].to_markdown(index=False))
+    lines.append("")
+
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> None:
@@ -150,7 +214,7 @@ def main() -> None:
     data = load_holdout(loader)
     print(f"Holdout ready: {len(data)}/{len(HOLDOUT_TICKERS)} tickers usable\n")
 
-    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7)
+    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7, starting_capital=STARTING_CAPITAL_RUB)
 
     print("=== Single-asset components + composites ===")
     single_df = run_single(backtester, data)
@@ -169,7 +233,12 @@ def main() -> None:
     }
     out_path = RESULTS_DIR / "holdout10_benchmark_results.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-    print(f"\nSaved {out_path}")
+    md_path = RESULTS_DIR / "holdout10_benchmark_results.md"
+    save_markdown(agg_df, thompson_df, len(data), md_path)
+    checkpoint = RESULTS_DIR / "_holdout10_checkpoint.json"
+    if checkpoint.exists():
+        checkpoint.unlink()
+    print(f"\nSaved {out_path} and {md_path}")
 
     print("\n--- Aggregated (mean across 10 holdout tickers) ---")
     print(agg_df[["algorithm_name", "n_tickers_ok", "mean_sharpe", "median_sharpe", "pct_positive_sharpe"]])

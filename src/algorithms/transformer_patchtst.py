@@ -1,7 +1,7 @@
 """
 Transformer (simplified PatchTST) - patching + self-attention over the time series.
 
-instead of feeding each day into attention separately, a window of `seq_len` days of features is cut into non-overlapping
+Instead of feeding each day into attention separately, a window of `seq_len` days of features is cut into non-overlapping
 patches of length `patch_len` (the PatchTST idea - attention works faster and generalizes
 better on patches than on individual points). Each patch is linearly
 projected into d_model, learnable positional embeddings are added to the

@@ -1,7 +1,7 @@
 """
 Variational Autoencoder (VAE) - a probabilistic version of compressing features into factors.
 
-unlike the deterministic autoencoder.py, the VAE learns not a point in latent space but a distribution
+Unlike the deterministic autoencoder.py, the VAE learns not a point in latent space but a distribution
 q(z|x) = N(mu, exp(log_var)), regularized toward N(0, 1) via the KL divergence.
 This should yield a smoother, less overfit latent space
 (the denoising benefit noted in the table), at the cost of worse reconstruction accuracy. As with

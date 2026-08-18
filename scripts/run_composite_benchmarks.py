@@ -50,6 +50,11 @@ START = datetime(2019, 1, 1, tzinfo=timezone.utc)
 END = datetime.now(timezone.utc)
 MIN_ROWS = 300
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
+STARTING_CAPITAL_RUB = 1_000_000.0
+
+
+def _money(x: float) -> str:
+    return f"{x:,.0f} ₽".replace(",", " ") if pd.notnull(x) else ""
 
 PRIMARY_TICKER = "SBER"
 BASELINE_10 = ["SBER", "GAZP", "LKOH", "GMKN", "VTBR", "ROSN", "NVTK", "MTSS", "TATN", "MOEX"]
@@ -102,6 +107,10 @@ def run_single_wide(backtester: Backtester, data: dict[str, pd.DataFrame]) -> tu
             row.update(result.to_flat_dict())
             rows.append(row)
         print(f"[composite/wide] {spec_name}: {n_tickers} tickers done")
+        # checkpoint after each composite - in case a long run gets interrupted
+        pd.DataFrame(rows).to_json(
+            RESULTS_DIR / "_composite_wide_checkpoint.json", orient="records", indent=2, force_ascii=False
+        )
     raw_df = pd.DataFrame(rows)
 
     agg_rows = []
@@ -121,6 +130,8 @@ def run_single_wide(backtester: Backtester, data: dict[str, pd.DataFrame]) -> tu
             "mean_max_drawdown": g["max_drawdown"].mean(),
             "mean_total_return": g["total_return"].mean(),
             "median_total_return": g["total_return"].median(),
+            "mean_pnl_rub": g["pnl_rub"].mean(),
+            "total_pnl_rub": g["pnl_rub"].sum(),
         })
     agg_df = pd.DataFrame(agg_rows).sort_values("mean_sharpe", ascending=False)
     return raw_df, agg_df
@@ -149,13 +160,82 @@ def run_thompson_strong(backtester: Backtester, data: dict[str, pd.DataFrame]) -
     return pd.DataFrame(rows)
 
 
+def save_markdown(sber_df: pd.DataFrame, wide_agg_df: pd.DataFrame, thompson_df: pd.DataFrame, path: Path) -> None:
+    lines = [
+        "# Composite pipeline benchmark results",
+        "",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        "",
+        "## Single-asset composites on SBER",
+        "",
+    ]
+    sdisp = sber_df.copy()
+    for col in ("total_return", "max_drawdown", "hit_rate", "win_rate"):
+        if col in sdisp.columns:
+            sdisp[col] = sdisp[col].map(lambda x: f"{x:.2%}" if pd.notnull(x) else "")
+    if "sharpe_ratio" in sdisp.columns:
+        sdisp["sharpe_ratio"] = sdisp["sharpe_ratio"].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
+    for col in ("starting_capital", "final_capital", "pnl_rub"):
+        if col in sdisp.columns:
+            sdisp[col] = sdisp[col].map(_money)
+    show_cols = [c for c in ["spec_name", "algorithm_name", "sharpe_ratio", "total_return", "max_drawdown",
+                              "n_trades", "pnl_rub", "error"] if c in sdisp.columns]
+    lines.append(sdisp[show_cols].to_markdown(index=False))
+    lines.append("")
+
+    lines.append("## Single-asset composites, cross-sectional (97-ticker MOEXBMI universe)")
+    lines.append("")
+    wdisp = wide_agg_df.copy()
+    for col in ("mean_sharpe", "median_sharpe", "std_sharpe"):
+        if col in wdisp.columns:
+            wdisp[col] = wdisp[col].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
+    for col in ("pct_positive_sharpe",):
+        if col in wdisp.columns:
+            wdisp[col] = wdisp[col].map(lambda x: f"{x:.1%}")
+    for col in ("mean_hit_rate", "mean_max_drawdown", "mean_total_return", "median_total_return"):
+        if col in wdisp.columns:
+            wdisp[col] = wdisp[col].map(lambda x: f"{x:.2%}")
+    for col in ("mean_pnl_rub", "total_pnl_rub"):
+        if col in wdisp.columns:
+            wdisp[col] = wdisp[col].map(_money)
+    lines.append(wdisp.to_markdown(index=False))
+    lines.append("")
+    if not wide_agg_df.empty:
+        by_money = wide_agg_df.sort_values("total_pnl_rub", ascending=False)
+        lines.append(
+            f"Made the most money: **{by_money.iloc[0]['algorithm_name']}** "
+            f"({_money(by_money.iloc[0]['total_pnl_rub'])}). "
+            f"Lost the most: **{by_money.iloc[-1]['algorithm_name']}** "
+            f"({_money(by_money.iloc[-1]['total_pnl_rub'])})."
+        )
+        lines.append("")
+
+    lines.append("## Thompson Sampling with strong arms, across ticker universes")
+    lines.append("")
+    tdisp = thompson_df.copy()
+    for col in ("total_return", "max_drawdown", "hit_rate", "win_rate"):
+        if col in tdisp.columns:
+            tdisp[col] = tdisp[col].map(lambda x: f"{x:.2%}" if pd.notnull(x) else "")
+    if "sharpe_ratio" in tdisp.columns:
+        tdisp["sharpe_ratio"] = tdisp["sharpe_ratio"].map(lambda x: f"{x:.3f}" if pd.notnull(x) else "")
+    for col in ("starting_capital", "final_capital", "pnl_rub"):
+        if col in tdisp.columns:
+            tdisp[col] = tdisp[col].map(_money)
+    show_cols = [c for c in ["universe", "n_tickers", "sharpe_ratio", "total_return", "max_drawdown",
+                              "n_trades", "pnl_rub", "error"] if c in tdisp.columns]
+    lines.append(tdisp[show_cols].to_markdown(index=False))
+    lines.append("")
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def main() -> None:
     loader = TInvestDataLoader()
     print("Loading universe from cache ...")
     data = load_universe(loader)
     print(f"Universe ready: {len(data)}/{len(TICKERS_100)} tickers usable\n")
 
-    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7)
+    backtester = Backtester(transaction_cost_bps=5.0, train_frac=0.7, starting_capital=STARTING_CAPITAL_RUB)
 
     print("=== Single-asset composites on SBER ===")
     sber_df = run_single_sber(backtester, data)
@@ -176,7 +256,12 @@ def main() -> None:
     }
     out_path = RESULTS_DIR / "composite_benchmark_results.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-    print(f"\nSaved {out_path}")
+    md_path = RESULTS_DIR / "composite_benchmark_results.md"
+    save_markdown(sber_df, wide_agg_df, thompson_df, md_path)
+    checkpoint = RESULTS_DIR / "_composite_wide_checkpoint.json"
+    if checkpoint.exists():
+        checkpoint.unlink()
+    print(f"\nSaved {out_path} and {md_path}")
 
     print("\n--- SBER results ---")
     print(sber_df[["spec_name", "sharpe_ratio", "total_return", "max_drawdown", "n_trades"]])

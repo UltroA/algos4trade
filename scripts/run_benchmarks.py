@@ -111,7 +111,10 @@ def main() -> None:
     runner.register("correlation_clustering", lambda: CorrelationClustering(), tickers=TICKERS)
     runner.register("thompson_bandits", lambda: ThompsonSamplingAllocator(), tickers=TICKERS)
 
-    results = runner.run_all(verbose=True)
+    # basename= enables autosave: results/benchmark_results.{json,md} are
+    # rewritten after EVERY algorithm finishes, not just once at the end -
+    # a run killed partway through still leaves the completed algorithms saved.
+    results = runner.run_all(verbose=True, basename="benchmark_results")
     runner.save(results, basename="benchmark_results")
     print("\nSaved results/benchmark_results.json and results/benchmark_results.md")
     print(results[["spec_name", "sharpe_ratio", "total_return", "max_drawdown", "error"]])

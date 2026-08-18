@@ -87,11 +87,28 @@ FEATURE_COLUMNS = [
 def split_features_target(
     feat_df: pd.DataFrame, target_col: str = "fwd_direction", feature_cols: list[str] | None = None
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """Drops rows with NaN in the features/target and returns (X, y)."""
+    """Drops rows with NaN in the features/target and returns (X, y). Training-only:
+    dropping rows with an unknown target is correct there, but the same drop silently
+    discards the most recent row(s) at inference time - see select_features() below."""
     cols = feature_cols or FEATURE_COLUMNS
     cols = [c for c in cols if c in feat_df.columns]
     clean = feat_df.dropna(subset=cols + [target_col])
     return clean[cols], clean[target_col]
+
+
+def select_features(feat_df: pd.DataFrame, feature_cols: list[str] | None = None) -> pd.DataFrame:
+    """Drops rows with NaN in the features only and returns X, with no dependency on any
+    target column. For inference (generate_signals), use this instead of
+    split_features_target(): a regression target like fwd_return is genuinely NaN on the
+    most recent row (the future outcome isn't known yet), so dropping on it there would
+    always discard exactly the row live trading needs - the current tick's own signal.
+    fwd_direction happens not to hit this (NaN > 0 evaluates to False, so it is never NaN),
+    which is why this only ever surfaced as "always-flat" for the regression-target
+    algorithms (elastic_net, lasso, gaussian_process, genetic_programming), not the
+    classification-target ones."""
+    cols = feature_cols or FEATURE_COLUMNS
+    cols = [c for c in cols if c in feat_df.columns]
+    return feat_df.dropna(subset=cols)[cols]
 
 
 def chronological_split(df: pd.DataFrame, train_frac: float = 0.7) -> tuple[pd.DataFrame, pd.DataFrame]:

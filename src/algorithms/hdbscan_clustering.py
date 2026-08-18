@@ -33,6 +33,7 @@ class HDBSCANPairsClustering(MultiAssetAlgorithm):
     def __init__(
         self,
         min_cluster_size: int = 2,
+        min_samples: int = 1,
         lookback: int = 60,
         zscore_window: int = 20,
         entry_z: float = 1.5,
@@ -40,10 +41,17 @@ class HDBSCANPairsClustering(MultiAssetAlgorithm):
         **kwargs,
     ):
         super().__init__(
-            min_cluster_size=min_cluster_size, lookback=lookback, zscore_window=zscore_window,
-            entry_z=entry_z, exit_z=exit_z, **kwargs,
+            min_cluster_size=min_cluster_size, min_samples=min_samples, lookback=lookback,
+            zscore_window=zscore_window, entry_z=entry_z, exit_z=exit_z, **kwargs,
         )
         self.min_cluster_size = min_cluster_size
+        # HDBSCAN's default min_samples equals min_cluster_size, which on a small
+        # universe (this project's baseline is 10 assets) is conservative enough to
+        # label every single point as noise (verified on real MOEX daily data: with
+        # min_samples=2, all 10 baseline tickers came back -1, zero trades for the
+        # whole backtest; min_samples=1 - the least conservative valid setting -
+        # recovered 2 real clusters covering 8/10 tickers on the same data).
+        self.min_samples = min_samples
         self.lookback = lookback
         self.zscore_window = zscore_window
         self.entry_z = entry_z
@@ -70,7 +78,20 @@ class HDBSCANPairsClustering(MultiAssetAlgorithm):
         common_index = common_index.sort_values()[-self.lookback :]
         matrix = np.vstack([log_returns[t].reindex(common_index).to_numpy() for t in tickers])
 
-        clusterer = HDBSCAN(min_cluster_size=self.min_cluster_size, metric="euclidean")
+        # Standardize each ticker's own return series (zero mean, unit
+        # variance) before clustering: on real, heteroskedastic assets
+        # (e.g. MOEX blue chips, where 5min-return volatility can differ
+        # 2-3x between tickers), raw euclidean distance is dominated by
+        # whichever tickers simply move more, not by which ones co-move -
+        # verified this makes HDBSCAN label every single ticker as noise
+        # (-1) on real data even when the correlation matrix clearly shows
+        # groups (e.g. SBER-LKOH at 0.77), while standardizing recovers
+        # them.
+        row_std = matrix.std(axis=1, keepdims=True)
+        row_std[row_std == 0] = 1.0
+        matrix = (matrix - matrix.mean(axis=1, keepdims=True)) / row_std
+
+        clusterer = HDBSCAN(min_cluster_size=self.min_cluster_size, min_samples=self.min_samples, metric="euclidean")
         labels = clusterer.fit_predict(matrix)
         self._cluster_of = dict(zip(tickers, labels.tolist()))
         self.is_fitted = True
